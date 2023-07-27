@@ -27,7 +27,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gabriel-vasile/mimetype"
@@ -252,23 +251,28 @@ var inspectors = []Inspector{
 // InspectionContext contains session-specific contextual data for stateful
 // analysis within a fetch session.
 type InspectionContext struct {
-	// releasePackages maps InRelease file digests to Packages.* file digests to metadata.
-	releasePackages map[Sha256Digest]map[Sha256Digest]AptReleasePackages
-	releaseLock     sync.Mutex
-
-	// packagesEntries maps Packages.* file digests to package digest to metadata.
-	packagesEntries map[Sha256Digest]map[Sha256Digest]AptPackagesEntry
-	packagesLock    sync.Mutex
+	Reg map[string]interface{}
 }
 
 func NewInspectionContext() *InspectionContext {
-	return &InspectionContext{
-		releasePackages: make(map[Sha256Digest]map[Sha256Digest]AptReleasePackages, 16),
-		packagesEntries: make(map[Sha256Digest]map[Sha256Digest]AptPackagesEntry, 256),
-	}
+	return &InspectionContext{Reg: map[string]interface{}{}}
 }
 
-// Run executes the registered inspectors for the artifact in the
+/*
+func (ctx *InspectionContext) Get(key string) interface{} {
+	value, ok := ctx.reg[key]
+	if ok {
+		return value
+	}
+	return nil
+}
+
+func (ctx *InspectionContext) Set(key string, value interface{}) {
+	ctx.reg[key] = value
+}
+*/
+
+// RunInspectors executes the registered inspectors for the artifact in the
 // given directory, populating the metadata structure md.
 func (ctx *InspectionContext) RunInspectors(dir string, md *Metadata, di *DownloadInfo) error {
 	// detect file type
@@ -302,55 +306,6 @@ func (ctx *InspectionContext) RunInspectors(dir string, md *Metadata, di *Downlo
 	}
 
 	return nil
-}
-
-func (ctx *InspectionContext) AddReleasePackages(relDigest Sha256Digest, digest Sha256Digest, p AptReleasePackages) {
-	ctx.releaseLock.Lock()
-	defer ctx.releaseLock.Unlock()
-
-	if ctx.releasePackages[relDigest] == nil {
-		ctx.releasePackages[relDigest] = make(map[Sha256Digest]AptReleasePackages, 16)
-	}
-	ctx.releasePackages[relDigest][digest] = p
-	//log.Printf("apt releases file: %s %s", digest, p.Path)
-}
-
-func (ctx *InspectionContext) GetReleasePackages(digest Sha256Digest) (relDigest Sha256Digest, p AptReleasePackages, ok bool) {
-	ctx.releaseLock.Lock()
-	defer ctx.releaseLock.Unlock()
-
-	for d, pkgs := range ctx.releasePackages {
-		p, ok = pkgs[digest]
-		if ok {
-			relDigest = d
-			return
-		}
-	}
-	return
-}
-
-func (ctx *InspectionContext) AddPackagesEntry(pkgsDigest Sha256Digest, digest Sha256Digest, e AptPackagesEntry) {
-	ctx.packagesLock.Lock()
-	defer ctx.packagesLock.Unlock()
-
-	if ctx.packagesEntries[pkgsDigest] == nil {
-		ctx.packagesEntries[pkgsDigest] = make(map[Sha256Digest]AptPackagesEntry)
-	}
-	ctx.packagesEntries[pkgsDigest][digest] = e
-}
-
-func (ctx *InspectionContext) GetPackagesEntry(digest Sha256Digest) (pkgsDigest Sha256Digest, e AptPackagesEntry, ok bool) {
-	ctx.packagesLock.Lock()
-	defer ctx.packagesLock.Unlock()
-
-	for d, entries := range ctx.packagesEntries {
-		e, ok = entries[digest]
-		if ok {
-			pkgsDigest = d
-			return
-		}
-	}
-	return
 }
 
 // findCallerInspector returns the name of the inspector that called

@@ -27,9 +27,89 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/xi2/xz"
 )
+
+// Session context
+
+type aptContext struct {
+	// releasePackages maps InRelease file digests to Packages.* file digests to metadata.
+	releasePackages map[Sha256Digest]map[Sha256Digest]AptReleasePackages
+	releaseLock     sync.Mutex
+
+	// packagesEntries maps Packages.* file digests to package digest to metadata.
+	packagesEntries map[Sha256Digest]map[Sha256Digest]AptPackagesEntry
+	packagesLock    sync.Mutex
+}
+
+func newAptContext() *aptContext {
+	ac := aptContext{}
+	ac.releasePackages = map[Sha256Digest]map[Sha256Digest]AptReleasePackages{}
+	ac.packagesEntries = map[Sha256Digest]map[Sha256Digest]AptPackagesEntry{}
+
+	return &ac
+}
+
+func (ac *aptContext) AddReleasePackages(relDigest Sha256Digest, digest Sha256Digest, p AptReleasePackages) {
+	ac.releaseLock.Lock()
+	defer ac.releaseLock.Unlock()
+
+	if ac.releasePackages[relDigest] == nil {
+		ac.releasePackages[relDigest] = make(map[Sha256Digest]AptReleasePackages, 16)
+	}
+	ac.releasePackages[relDigest][digest] = p
+	//log.Printf("apt releases file: %s %s", digest, p.Path)
+}
+
+func (ac *aptContext) GetReleasePackages(digest Sha256Digest) (relDigest Sha256Digest, p AptReleasePackages, ok bool) {
+	ac.releaseLock.Lock()
+	defer ac.releaseLock.Unlock()
+
+	for d, pkgs := range ac.releasePackages {
+		p, ok = pkgs[digest]
+		if ok {
+			relDigest = d
+			return
+		}
+	}
+	return
+}
+
+func (ac *aptContext) AddPackagesEntry(pkgsDigest Sha256Digest, digest Sha256Digest, e AptPackagesEntry) {
+	ac.packagesLock.Lock()
+	defer ac.packagesLock.Unlock()
+
+	if ac.packagesEntries[pkgsDigest] == nil {
+		ac.packagesEntries[pkgsDigest] = make(map[Sha256Digest]AptPackagesEntry)
+	}
+	ac.packagesEntries[pkgsDigest][digest] = e
+}
+
+func (ac *aptContext) GetPackagesEntry(digest Sha256Digest) (pkgsDigest Sha256Digest, e AptPackagesEntry, ok bool) {
+	ac.packagesLock.Lock()
+	defer ac.packagesLock.Unlock()
+
+	for d, entries := range ac.packagesEntries {
+		e, ok = entries[digest]
+		if ok {
+			pkgsDigest = d
+			return
+		}
+	}
+	return
+}
+
+func ensureAptContext(ctx *InspectionContext) {
+	if _, ok := ctx.Reg["apt"]; !ok {
+		ctx.Reg["apt"] = newAptContext()
+	}
+}
+
+func getAptContext(ctx *InspectionContext) *aptContext {
+	return ctx.Reg["apt"].(*aptContext)
+}
 
 // Distribution Release/InRelease file
 // (http://archive.ubuntu.com/ubuntu/dists/jammy/InRelease)
@@ -109,6 +189,8 @@ func (aptReleaseInspector) Inspect(filename string, md *Metadata, di *DownloadIn
 	}
 	stop = true
 
+	ensureAptContext(ctx)
+
 	f, err := os.Open(filename)
 	if err != nil {
 		return
@@ -152,7 +234,7 @@ func (aptReleaseInspector) Inspect(filename string, md *Metadata, di *DownloadIn
 					log.Printf("warning: error parsing digest '%s': %s", digest, err)
 					continue
 				}
-				ctx.AddReleasePackages(md.Sha256, h, p)
+				getAptContext(ctx).AddReleasePackages(md.Sha256, h, p)
 			}
 			continue
 		}
@@ -363,7 +445,7 @@ func (aptPackagesInspector) Inspect(filename string, md *Metadata, di *DownloadI
 	stop = true
 
 	// obtain the Packages.xz path from the Release file
-	relDigest, p, ok := ctx.GetReleasePackages(md.Sha256)
+	relDigest, p, ok := getAptContext(ctx).GetReleasePackages(md.Sha256)
 	if ok {
 		if p.Size != md.Size {
 			data := AnnotationDetails{"release-data": p}
@@ -438,7 +520,7 @@ func (aptPackagesInspector) Inspect(filename string, md *Metadata, di *DownloadI
 				err = fmt.Errorf("error parsing digest '%s': %s", v, err)
 				return
 			}
-			ctx.AddPackagesEntry(md.Sha256, h, e)
+			getAptContext(ctx).AddPackagesEntry(md.Sha256, h, e)
 		}
 	}
 

@@ -40,12 +40,14 @@ func (debInspector) Inspect(filename string, md *Metadata, di *DownloadInfo, ctx
 	}
 	stop = true
 
+	ensureAptContext(ctx)
+
 	err = readDebMetadata(filename, md)
 	if err != nil {
 		return
 	}
 
-	pkgsDigest, e, ok := ctx.GetPackagesEntry(md.Sha256)
+	pkgsDigest, e, ok := getAptContext(ctx).GetPackagesEntry(md.Sha256)
 	if ok {
 		if md.Name != e.Package || md.Version != e.Version || md.Architecture != e.Architecture || md.Size != e.Size {
 			data := AnnotationDetails{"packages-data": e}

@@ -21,6 +21,10 @@ package metadata
 
 var (
 	ZipMatches = zipMatches
+
+	EnsureAptContext = ensureAptContext
+	GetAptContext    = getAptContext
+	NewAptContext    = newAptContext
 )
 
 type DefaultInspector struct {

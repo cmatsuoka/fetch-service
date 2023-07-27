@@ -129,7 +129,8 @@ func (s *aptSuite) TestAptPackagesInspector(c *C) {
 	releaseHash, _ := metadata.NewSha256Digest("7a0965cdce7e57af669e786379edcf45953de9bca3763342b870b3ce6d0dd777")
 	packagesHash, _ := metadata.NewSha256Digest("0f9d4626df5afdf378004213b7f594cfb1ca0159ad00a4921fb40049dbcb292e")
 	ctx := metadata.NewInspectionContext()
-	ctx.AddReleasePackages(releaseHash, packagesHash, p)
+	metadata.EnsureAptContext(ctx)
+	metadata.GetAptContext(ctx).AddReleasePackages(releaseHash, packagesHash, p)
 
 	md := &metadata.Metadata{
 		Type:   "application/x-apt-packages",
@@ -152,4 +153,59 @@ func (s *aptSuite) TestAptPackagesInspector(c *C) {
 	c.Check(md.Author, Equals, "Acme")
 	c.Check(md.Annotations["file.integrity.asserted-by"].Kind, Equals, metadata.Notice)
 	c.Check(md.Annotations["file.integrity.asserted-by"].Value, Equals, "7a0965cdce7e57af669e786379edcf45953de9bca3763342b870b3ce6d0dd777")
+}
+
+func (s *aptSuite) TestContextReleasePackages(c *C) {
+	ctx := metadata.NewInspectionContext()
+	c.Assert(ctx, Not(IsNil))
+
+	metadata.EnsureAptContext(ctx)
+
+	p := metadata.AptReleasePackages{
+		Path:   "path/to/Packages.xz",
+		Size:   12345,
+		Vendor: "Acme",
+	}
+
+	releaseDigest, _ := metadata.NewSha256Digest(MySha256)
+	packagesDigest, _ := metadata.NewSha256Digest("f1d6e0e435c851796ddc982230070bf5f6c313fade049f31e2983e5b26c43a72")
+	otherDigest, _ := metadata.NewSha256Digest("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff")
+	metadata.GetAptContext(ctx).AddReleasePackages(releaseDigest, packagesDigest, p)
+
+	digest, _, ok := metadata.GetAptContext(ctx).GetReleasePackages(otherDigest)
+	c.Assert(ok, Equals, false)
+	c.Assert(digest, Equals, metadata.Sha256Digest{})
+
+	digest, q, ok := metadata.GetAptContext(ctx).GetReleasePackages(packagesDigest)
+	c.Assert(ok, Equals, true)
+	c.Assert(digest, Equals, releaseDigest)
+	c.Assert(q, DeepEquals, p)
+}
+
+func (s *aptSuite) TestContextPackagesEntry(c *C) {
+	ctx := metadata.NewInspectionContext()
+	c.Assert(ctx, Not(IsNil))
+
+	metadata.EnsureAptContext(ctx)
+
+	e := metadata.AptPackagesEntry{
+		Package:      "hello",
+		Version:      "1.2.3",
+		Architecture: "amd64",
+		Size:         1337,
+	}
+
+	packagesDigest, _ := metadata.NewSha256Digest(MySha256)
+	helloDigest, _ := metadata.NewSha256Digest("e24f8496e591bfa9fc493ab6bbb702b8ee60a47d974139c17f20f095dd0d5670")
+	otherDigest, _ := metadata.NewSha256Digest("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff")
+	metadata.GetAptContext(ctx).AddPackagesEntry(packagesDigest, helloDigest, e)
+
+	digest, _, ok := metadata.GetAptContext(ctx).GetPackagesEntry(otherDigest)
+	c.Assert(ok, Equals, false)
+	c.Assert(digest, Equals, metadata.Sha256Digest{})
+
+	digest, f, ok := metadata.GetAptContext(ctx).GetPackagesEntry(helloDigest)
+	c.Assert(ok, Equals, true)
+	c.Assert(digest, Equals, packagesDigest)
+	c.Assert(f, DeepEquals, e)
 }
