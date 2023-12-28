@@ -65,12 +65,10 @@ func New(permissive bool) *Session {
 
 	s.Insps = inspectors.New(permissive)
 
-	/*
-		// FIXME: predictable values for testing convenience until the session
-		//        creation API is implemented.
-		s.Id = "6ba7b8109dad11d180b400c04fd430c8"
-		s.Pw = "1ItfzwGBeJ8wsJdP0Nlx"
-	*/
+	// FIXME: predictable values for testing convenience until the session
+	//        creation API is implemented.
+	s.Id = "6ba7b8109dad11d180b400c04fd430c8"
+	s.Pw = "1ItfzwGBeJ8wsJdP0Nlx"
 
 	var sType string
 	if permissive {

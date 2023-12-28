@@ -30,9 +30,12 @@ import (
 	"github.com/canonical/fetch-service/service/messages"
 )
 
-type SessionData struct {
-	ID    string
-	Token string
+type createSessionParameters struct {
+	Timeout    int  `json:"timeout"`
+	Permissive bool `json:"permissive"`
+}
+
+type endSessionParameters struct {
 }
 
 type Server struct {
@@ -47,8 +50,8 @@ func NewServer(port int, ch chan interface{}) *Server {
 func (c *Server) Start() {
 	addr := fmt.Sprintf(":%d", c.port)
 	router := mux.NewRouter().StrictSlash(true)
-	router.HandleFunc("/new-session", c.createSession)
-	router.HandleFunc("/end-session/{id}", c.endSession)
+	router.HandleFunc("/new-session", c.createSession).Methods("POST")
+	router.HandleFunc("/end-session/{id}", c.endSession).Methods("POST")
 
 	logger.Infof("control server listening on %s\n", addr)
 
@@ -58,12 +61,23 @@ func (c *Server) Start() {
 }
 
 func (c *Server) createSession(w http.ResponseWriter, r *http.Request) {
+	logger.Debugf("create session")
+
+	var params createSessionParameters
+	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		internalServerError(w, r)
+		return
+	}
+
+	logger.Debugf("create session parameters: %+v\n", params)
+
 	msg := messages.NewCreateSession()
 	c.ch <- msg
 	cred := <-msg.Rch
 	j, err := json.Marshal(cred)
 	if err != nil {
-		panic(err) // XXX
+		internalServerError(w, r)
+		return
 	}
 	w.Write(j)
 }
@@ -72,14 +86,37 @@ func (c *Server) endSession(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id, ok := vars["id"]
 	if !ok {
-		panic("not ok")
+		notFound(w, r)
+		return
 	}
+
+	var params endSessionParameters
+	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		internalServerError(w, r)
+		return
+	}
+
+	logger.Debugf("end session parameters: %+v\n", params)
+
 	msg := messages.NewEndSession(id)
 	c.ch <- msg
 	result := <-msg.Rch
 	j, err := json.Marshal(result)
 	if err != nil {
-		panic(err) // XXX
+		internalServerError(w, r)
+		return
 	}
 	w.Write(j)
+}
+
+func internalServerError(w http.ResponseWriter, r *http.Request) {
+	logger.Warningf("internal server error response: %s", r.URL)
+	w.WriteHeader(http.StatusInternalServerError)
+	w.Write([]byte("500 Internal Server Error"))
+}
+
+func notFound(w http.ResponseWriter, r *http.Request) {
+	logger.Warningf("not found response: %s", r.URL)
+	w.WriteHeader(http.StatusNotFound)
+	w.Write([]byte("404 Not Found"))
 }
