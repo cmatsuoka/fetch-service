@@ -26,6 +26,7 @@ import (
 	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/fetch-service/control"
+	. "github.com/canonical/fetch-service/inspectors/common"
 	"github.com/canonical/fetch-service/logger"
 	"github.com/canonical/fetch-service/metadata"
 	"github.com/canonical/fetch-service/proxy"
@@ -74,7 +75,7 @@ func (svc *Service) Start() error {
 			select {
 			case msg := <-svc.ch:
 				switch v := msg.(type) {
-				case messages.RequestAuthorization:
+				case messages.RequestInspection:
 					sessionId := v.A.SessionId
 					s := session.GetSession(sessionId)
 					if s == nil {
@@ -85,13 +86,24 @@ func (svc *Service) Start() error {
 					go func(a *metadata.Artefact, rch chan error) {
 						// Check request
 						if err := s.Insps.RunRequestInspectors(a); err != nil {
-							logger.Errorf("%s", err)
+							logger.Errorf("[%s] %s", sessionId, err)
 							rch <- err
 							return
 						}
 
 						dl := v.A.CurrentDownload
-						logger.Infof("[%s] %s %s: request approved", sessionId, dl.Method, dl.URL)
+
+						if a.Rejected() {
+							if s.Permissive {
+								logger.Infof("[%s] request would be rejected: %s %s", sessionId, dl.Method, dl.URL)
+							} else {
+								logger.Warningf("[%s] request rejected: %s %s", sessionId, dl.Method, dl.URL)
+								rch <- ErrRejectedRequest
+								return
+							}
+						} else {
+							logger.Infof("[%s] request approved: %s %s", sessionId, dl.Method, dl.URL)
+						}
 						rch <- nil
 					}(v.A, v.Rch)
 
@@ -102,7 +114,7 @@ func (svc *Service) Start() error {
 						SessionCount:   svc.sCount,
 					}
 
-				case messages.ArtefactDownload:
+				case messages.ResponseInspection:
 					assetDir := v.A.AssetDir
 					sessionId := v.A.SessionId
 					digest := v.A.Metadata.Sha256
@@ -141,7 +153,19 @@ func (svc *Service) Start() error {
 							return
 						}
 
-						logger.Infof("[%s] artefact %s %d (%s)", sessionId, digest, a.Metadata.Size, a.Metadata.Type)
+						if a.Rejected() {
+							if s.Permissive {
+								logger.Infof("[%s] artefact %s %d (%s) would be rejected (permissive)",
+									sessionId, digest, a.Metadata.Size, a.Metadata.Type)
+							} else {
+								logger.Warningf("[%s] artefact rejected: %s %d (%s)",
+									sessionId, digest, a.Metadata.Size, a.Metadata.Type)
+								rch <- ErrRejectedArtefact
+								return
+							}
+						} else {
+							logger.Infof("[%s] artefact approved: %s %d (%s)", sessionId, digest, a.Metadata.Size, a.Metadata.Type)
+						}
 						rch <- nil
 					}(v.A, v.Rch)
 

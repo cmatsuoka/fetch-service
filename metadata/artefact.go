@@ -156,16 +156,31 @@ func (a *Artefact) Consider(id Identifiable, reason string, args ...any) *Inspec
 	return in
 }
 
+func (a *Artefact) Comment(id Identifiable, reason string, args ...any) *Inspection {
+	in := &Inspection{
+		Opinion: Unknown,
+		Reason:  fmt.Sprintf(reason, args...),
+	}
+
+	if a.State == RequestState {
+		a.RequestInspection[id.ID()] = in
+	} else {
+		a.ResponseInspection[id.ID()] = in
+	}
+
+	return in
+}
+
 func (a *Artefact) Reject(id Identifiable, reason string, args ...any) *Inspection {
 	in := &Inspection{
 		Opinion: Rejected,
 		Reason:  fmt.Sprintf(reason, args...),
 	}
 
-	if a.State == ResponseState {
-		a.ResponseInspection[id.ID()] = in
-	} else {
+	if a.State == RequestState {
 		a.RequestInspection[id.ID()] = in
+	} else {
+		a.ResponseInspection[id.ID()] = in
 	}
 
 	return in
@@ -184,50 +199,50 @@ func (a *Artefact) Approve(id Identifiable, reason string, args ...any) *Inspect
 }
 
 func (a *Artefact) Pending() bool {
-	if len(a.RequestInspection) == 0 {
+	// An artefact can only be pending during request.
+	if a.State != RequestState {
 		return false
 	}
+	res := false
 	for _, in := range a.RequestInspection {
-		if in.Opinion == Pending {
-			return true
+		if in.Opinion == Rejected {
+			return false
+		} else if in.Opinion == Pending {
+			res = true
 		}
 	}
-	return false
+	return res
 }
 
 func (a *Artefact) Approved() bool {
-	for _, in := range a.RequestInspection {
+	// An artefact is approved if there's at least one approval opinion
+	// and no rejections in the response inspection.
+	res := false
+	for _, in := range a.ResponseInspection {
 		if in.Opinion == Rejected {
 			return false
+		} else if in.Opinion == Approved {
+			res = true
 		}
 	}
-
-	if len(a.ResponseInspection) == 0 {
-		return false
-	}
-	for _, in := range a.ResponseInspection {
-		if in.Opinion != Approved {
-			return false
-		}
-	}
-	return true
+	return res
 }
 
 func (a *Artefact) Rejected() bool {
-	for _, in := range a.RequestInspection {
-		if in.Opinion == Rejected {
-			return true
-		}
-	}
-	for _, in := range a.ResponseInspection {
-		if in.Opinion == Rejected {
-			return true
-		}
-	}
-	return false
+	// Otherwise it's rejected
+	return !a.Pending() && !a.Approved()
 }
 
 func (a *Artefact) Unknown() bool {
+	// The artefact has no approval or rejection opinions.
+	if a.State == RequestState {
+		for _, in := range a.RequestInspection {
+			if in.Opinion != Unknown {
+				return false
+			}
+		}
+		return true
+	}
 	for _, in := range a.ResponseInspection {
 		if in.Opinion != Unknown {
 			return false

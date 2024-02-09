@@ -90,7 +90,8 @@ func (s *simpleIndexSuite) TestInspectArtefactBadType(c *C) {
 
 	err := ins.InspectArtefact(nil, a)
 	c.Assert(err, IsNil)
-	c.Assert(a.Unknown(), Equals, true)
+	c.Assert(a.Approved(), Equals, false)
+	c.Assert(a.Rejected(), Equals, true)
 }
 
 func (s *simpleIndexSuite) TestWheelInspectArtefactBadContent(c *C) {
@@ -111,7 +112,8 @@ func (s *simpleIndexSuite) TestWheelInspectArtefactBadContent(c *C) {
 
 	err = ins.InspectArtefact(f, a)
 	c.Assert(err, IsNil)
-	c.Assert(a.Unknown(), Equals, true)
+	c.Assert(a.Approved(), Equals, false)
+	c.Assert(a.Rejected(), Equals, true)
 	c.Assert(a.ResponseInspection, DeepEquals, metadata.InspectionMap{})
 }
 

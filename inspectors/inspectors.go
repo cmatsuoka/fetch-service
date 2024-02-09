@@ -66,12 +66,15 @@ type Inspectors struct {
 func New(permissive bool) Inspectors {
 
 	insList := []Inspector{
+		// python
 		pip.NewSimpleIndexInspector(),
 		pip.NewWheelInspector(),
+
+		// deb packages
 		deb.NewDebInspector(),
 		apt.NewAptReleaseInspector(),
 		apt.NewAptPackagesInspector(),
-		DefaultInspector{permissive},
+		DefaultInspector{},
 	}
 
 	insNum := len(insList)
@@ -143,10 +146,10 @@ func (insps Inspectors) RunArtefactInspectors(dir string, a *metadata.Artefact) 
 	// run artefact inspectors
 	for _, id := range insps.ids {
 		// if not permissive, only inspectors with pending opinions can run
-		// (default inspector always runs)
-		if !insps.permissive {
+		// (the default inspector always runs)
+		if !insps.permissive && id != "default" {
 			reqin, ok := a.RequestInspection[id]
-			if (!ok || reqin.Opinion != metadata.Pending) && id != "default" {
+			if !ok || reqin.Opinion != metadata.Pending {
 				continue
 			}
 		}
@@ -166,9 +169,6 @@ func (insps Inspectors) RunArtefactInspectors(dir string, a *metadata.Artefact) 
 		a.State = metadata.ApprovedState
 	} else {
 		a.State = metadata.RejectedState
-		if !insps.permissive {
-			return ErrRejectedArtefact
-		}
 	}
 
 	return nil
@@ -188,10 +188,8 @@ func (insps Inspectors) List() []string {
 	return insps.ids
 }
 
-// DefaultInspector is a fallback artefact inspector for unknown file
-// formats.
+// DefaultInspector is a fallback inspector for unknown requests or artefacts
 type DefaultInspector struct {
-	Permissive bool
 }
 
 func (ins DefaultInspector) ID() string {
@@ -200,19 +198,14 @@ func (ins DefaultInspector) ID() string {
 
 func (ins DefaultInspector) InspectRequest(a *metadata.Artefact) error {
 	if !a.Pending() {
-		if ins.Permissive {
-			logger.Infof("request to %s would be rejected (permissive)", a.CurrentDownload.URL)
-			a.Consider(ins, "allowed because running in permissive mode")
-		} else {
-			a.Reject(ins, "no further inspection pending")
-		}
+		a.Comment(ins, "the request was not recognized by any format inspector")
 	}
 	return nil
 }
 
 func (ins DefaultInspector) InspectArtefact(f ReadAtSeeker, a *metadata.Artefact) error {
 	if a.Unknown() {
-		a.Reject(ins, "artefact format unknown")
+		a.Comment(ins, "the artefact format is unknown")
 	}
 	return nil
 }

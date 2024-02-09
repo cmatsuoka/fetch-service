@@ -26,7 +26,6 @@ import (
 
 	. "gopkg.in/check.v1"
 
-	"github.com/canonical/fetch-service/inspectors"
 	. "github.com/canonical/fetch-service/inspectors/common"
 	"github.com/canonical/fetch-service/logger"
 	"github.com/canonical/fetch-service/logger/testlogger"
@@ -51,7 +50,7 @@ var _ = Suite(&inspectorsSuite{})
 func (t *inspectorsSuite) TestRunRequestInspectors(c *C) {
 	a := metadata.NewArtefact()
 
-	s := session.New(false)
+	s := session.New(c.MkDir(), false)
 	defer s.Discard()
 
 	err := s.Insps.RunRequestInspectors(a)
@@ -67,7 +66,7 @@ func (t *inspectorsSuite) TestRunRequestInspectors(c *C) {
 func (t *inspectorsSuite) TestRunRequestInspectorsPermissive(c *C) {
 	a := metadata.NewArtefact()
 
-	s := session.New(true)
+	s := session.New(c.MkDir(), true)
 	defer s.Discard()
 
 	err := s.Insps.RunRequestInspectors(a)
@@ -92,7 +91,7 @@ func (t *inspectorsSuite) TestRunArtefactInspectors(c *C) {
 	a.CurrentDownload.Sha256 = h
 	a.Metadata.Sha256 = h
 
-	s := session.New(false)
+	s := session.New(c.MkDir(), false)
 	defer s.Discard()
 
 	err = s.Insps.RunArtefactInspectors(dir, a)
@@ -132,81 +131,4 @@ func (t *inspectorsSuite) TestRunArtefactInspectorsPermissive(c *C) {
 		},
 	})
 	c.Assert(a.State, Equals, metadata.InspectionState("Rejected"))
-}
-
-func (t *inspectorsSuite) TestDefaultInspectorRequest(c *C) {
-	a := metadata.NewArtefact()
-
-	var iface inspectors.Inspector
-	ins := inspectors.DefaultInspector{}
-	c.Assert(ins, Implements, &iface)
-
-	err := ins.InspectRequest(a)
-	c.Assert(err, IsNil)
-	c.Assert(a.Rejected(), Equals, true)
-	c.Assert(a.RequestInspection["default"], DeepEquals,
-		&metadata.Inspection{
-			Opinion: metadata.Rejected,
-			Reason:  "no further inspection pending",
-		},
-	)
-}
-
-func (t *inspectorsSuite) TestDefaultInspectorRequestPermissive(c *C) {
-	a := metadata.NewArtefact()
-
-	var iface inspectors.Inspector
-	ins := inspectors.DefaultInspector{Permissive: true}
-	c.Assert(ins, Implements, &iface)
-
-	err := ins.InspectRequest(a)
-	c.Assert(err, IsNil)
-	c.Assert(a.Pending(), Equals, true)
-	c.Assert(a.RequestInspection["default"], DeepEquals,
-		&metadata.Inspection{
-			Opinion: metadata.Pending,
-			Reason:  "allowed because running in permissive mode",
-		},
-	)
-}
-
-func (t *inspectorsSuite) TestDefaultInspectorResponse(c *C) {
-	a := metadata.NewArtefact()
-	a.Metadata.Type = "application/unit-test"
-	a.State = metadata.ResponseState
-
-	var iface inspectors.Inspector
-	ins := inspectors.DefaultInspector{}
-	c.Assert(ins, Implements, &iface)
-
-	err := ins.InspectArtefact(nil, a)
-	c.Assert(err, IsNil)
-	c.Assert(a.Rejected(), Equals, true)
-	c.Assert(a.ResponseInspection["default"], DeepEquals,
-		&metadata.Inspection{
-			Opinion: metadata.Rejected,
-			Reason:  "artefact format unknown",
-		},
-	)
-}
-
-func (t *inspectorsSuite) TestDefaultInspectorResponsePermissive(c *C) {
-	a := metadata.NewArtefact()
-	a.Metadata.Type = "application/unit-test"
-	a.State = metadata.ResponseState
-
-	var iface inspectors.Inspector
-	ins := inspectors.DefaultInspector{}
-	ins.Permissive = true
-	c.Assert(ins, Implements, &iface)
-
-	err := ins.InspectArtefact(nil, a)
-	c.Assert(err, IsNil)
-	c.Assert(a.Rejected(), Equals, true)
-	c.Assert(a.ResponseInspection["default"], DeepEquals,
-		&metadata.Inspection{
-			Opinion: metadata.Rejected,
-			Reason:  "artefact format unknown",
-		},
-	)
 }
