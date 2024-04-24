@@ -33,6 +33,7 @@ import (
 	"github.com/canonical/fetch-service/logger"
 	"github.com/canonical/fetch-service/metadata"
 	"github.com/canonical/fetch-service/proxy"
+	"github.com/canonical/fetch-service/service/config"
 	"github.com/canonical/fetch-service/service/messages"
 	"github.com/canonical/fetch-service/session"
 )
@@ -73,6 +74,10 @@ func New(opt *Options) *Service {
 
 // Start runs the fetch service dispatcher.
 func (svc *Service) Start() error {
+	if err := config.LoadHttpProxyRules(svc.opt.Config); err != nil {
+		return fmt.Errorf("cannot load proxy rules: %s", err)
+	}
+
 	logger.Info("Starting service...")
 	if err := svc.p.Start(); err != nil {
 		return err
