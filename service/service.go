@@ -22,10 +22,12 @@ package service
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sync/atomic"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/fetch-service/control"
@@ -40,12 +42,13 @@ import (
 
 // Service implements the fetch service main loop.
 type Service struct {
-	p     *proxy.HttpProxy // proxy instance
-	ctl   *control.Server  // control server
-	ch    chan interface{} // channel to get feedback from handlers
-	start time.Time        // service start time (UTC)
-	opt   *Options         // configuration options
-	tomb  tomb.Tomb        // service dispacher loop reaper
+	p     *proxy.HttpProxy  // proxy instance
+	ctl   *control.Server   // control server
+	ch    chan interface{}  // channel to get feedback from handlers
+	start time.Time         // service start time (UTC)
+	opt   *Options          // configuration options
+	tomb  tomb.Tomb         // service dispacher loop reaper
+	cfgw  *fsnotify.Watcher // configuration file watcher
 
 	// statistics
 	sCount            atomic.Uint64 // total number of sessions
@@ -74,11 +77,28 @@ func New(opt *Options) *Service {
 
 // Start runs the fetch service dispatcher.
 func (svc *Service) Start() error {
-	if err := config.LoadHttpProxyRules(svc.opt.Config); err != nil {
-		return fmt.Errorf("cannot load proxy rules: %s", err)
+	// Configuration file watcher
+	var err error
+	svc.cfgw, err = fsnotify.NewWatcher()
+	if err != nil {
+		return fmt.Errorf("cannot create watcher: %s", err)
+	}
+
+	if svc.opt.Config != "" {
+		err := config.LoadHttpProxyRules(svc.opt.Config)
+		if err != nil {
+			return fmt.Errorf("cannot load proxy rules: %s", err)
+		}
+
+		// Set up file watcher
+		if err := svc.cfgw.Add(filepath.Dir(svc.opt.Config)); err != nil {
+			return fmt.Errorf("cannot set up configuration file watcher: %s", err)
+		}
+		logger.Infof("Watching configuration file %s", svc.opt.Config)
 	}
 
 	logger.Info("Starting service...")
+
 	if err := svc.p.Start(); err != nil {
 		return err
 	}
@@ -315,6 +335,21 @@ func (svc *Service) Start() error {
 
 			case <-svc.tomb.Dying():
 				return nil
+
+			case event, ok := <-svc.cfgw.Events:
+				if ok && event.Op&fsnotify.Write == fsnotify.Write {
+					if event.Name == svc.opt.Config {
+						logger.Infof("Configuration file changed: %s", event.Name)
+						if err := config.LoadHttpProxyRules(svc.opt.Config); err != nil {
+							return fmt.Errorf("cannot load proxy rules: %s", err)
+						}
+					}
+				}
+
+			case err, ok := <-svc.cfgw.Errors:
+				if ok {
+					logger.Errorf("configuration file watcher error: %s", err)
+				}
 			}
 
 		}
@@ -326,6 +361,8 @@ func (svc *Service) Start() error {
 func (svc *Service) Stop() error {
 	logger.Info("Stopping service...")
 	session.FinishAll()
+
+	svc.cfgw.Close()
 
 	if err := svc.p.Stop(); err != nil {
 		logger.Warningf("Cannot shut down the HTTP server: %s", err)
