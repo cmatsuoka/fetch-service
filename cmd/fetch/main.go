@@ -53,7 +53,7 @@ var opts struct {
 	ProxyPort int `short:"p" long:"proxy-port" description:"Port number" default:"9988"`
 
 	// Path to the configuration file.
-	Config string `long:"config" description:"Path to the configuration file"`
+	Config string `long:"config" description:"Path to the directory containing configuration files" default:"/etc/fetch"`
 
 	// Path to the local spool containing downloaded files and extracted metadata.
 	Spool string `long:"spool" description:"Path to downloaded dependencies" default:"/var/lib/fetch"`

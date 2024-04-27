@@ -84,18 +84,16 @@ func (svc *Service) Start() error {
 		return fmt.Errorf("cannot create watcher: %s", err)
 	}
 
-	if svc.opt.Config != "" {
-		err := config.LoadHttpProxyRules(svc.opt.Config)
-		if err != nil {
-			return fmt.Errorf("cannot load proxy rules: %s", err)
-		}
-
-		// Set up file watcher
-		if err := svc.cfgw.Add(filepath.Dir(svc.opt.Config)); err != nil {
-			return fmt.Errorf("cannot set up configuration file watcher: %s", err)
-		}
-		logger.Infof("Watching configuration file %s", svc.opt.Config)
+	err = config.LoadHttpProxyRules(svc.opt.Config)
+	if err != nil {
+		return fmt.Errorf("cannot load proxy rules: %s", err)
 	}
+
+	// Set up file watcher
+	if err := svc.cfgw.Add(svc.opt.Config); err != nil {
+		return fmt.Errorf("cannot set up configuration watcher: %s", err)
+	}
+	logger.Infof("Watching configuration files in %s", svc.opt.Config)
 
 	logger.Info("Starting service...")
 
@@ -337,11 +335,14 @@ func (svc *Service) Start() error {
 				return nil
 
 			case event, ok := <-svc.cfgw.Events:
-				if ok && event.Op&fsnotify.Write == fsnotify.Write {
-					if event.Name == svc.opt.Config {
-						logger.Infof("Configuration file changed: %s", event.Name)
+				if ok && event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
+					logger.Debugf("event: %v %s", event.Op, event.Name)
+					logger.Infof("Configuration file changed: %s", event.Name)
+
+					switch filepath.Base(event.Name) {
+					case "acl.yaml":
 						if err := config.LoadHttpProxyRules(svc.opt.Config); err != nil {
-							return fmt.Errorf("cannot load proxy rules: %s", err)
+							logger.Errorf("cannot load proxy rules: %s", err)
 						}
 					}
 				}

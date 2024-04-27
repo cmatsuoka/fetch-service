@@ -23,6 +23,7 @@ import (
 	"errors"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -118,53 +119,56 @@ type HttpProxyConfig struct {
 	Rules  []Rule    `yaml:"rules"`
 }
 
-type Config struct {
+type ACLConfig struct {
 	HttpProxy HttpProxyConfig `yaml:"http-proxy"`
 }
 
 var (
-	globalConfig     Config
-	globalConfigLock sync.Mutex
+	globalACLConfig     ACLConfig
+	globalACLConfigLock sync.Mutex
 )
 
 func GetHttpProxyConfig() HttpProxyConfig {
-	globalConfigLock.Lock()
-	defer globalConfigLock.Unlock()
+	globalACLConfigLock.Lock()
+	defer globalACLConfigLock.Unlock()
 
 	cfg := HttpProxyConfig{
-		Policy: globalConfig.HttpProxy.Policy,
-		Rules:  make([]Rule, len(globalConfig.HttpProxy.Rules)),
+		Policy: globalACLConfig.HttpProxy.Policy,
+		Rules:  make([]Rule, len(globalACLConfig.HttpProxy.Rules)),
 	}
 
-	copy(cfg.Rules, globalConfig.HttpProxy.Rules)
+	copy(cfg.Rules, globalACLConfig.HttpProxy.Rules)
 
 	return cfg
 }
 
 func SetHttpProxyConfig(cfg HttpProxyConfig) {
-	globalConfigLock.Lock()
-	defer globalConfigLock.Unlock()
+	globalACLConfigLock.Lock()
+	defer globalACLConfigLock.Unlock()
 
-	globalConfig.HttpProxy.Policy = cfg.Policy
-	globalConfig.HttpProxy.Rules = make([]Rule, len(cfg.Rules))
-	copy(globalConfig.HttpProxy.Rules, cfg.Rules)
+	globalACLConfig.HttpProxy.Policy = cfg.Policy
+	globalACLConfig.HttpProxy.Rules = make([]Rule, len(cfg.Rules))
+	copy(globalACLConfig.HttpProxy.Rules, cfg.Rules)
 }
 
-func LoadHttpProxyRules(filepath string) error {
-	if filepath == "" {
-		logger.Warningf("Cannot load proxy rules, configuration file not specified.")
-		return nil
+func LoadHttpProxyRules(cfgdir string) error {
+	cfgfile := filepath.Join(cfgdir, "acl.yaml")
+	if _, err := os.Stat(cfgfile); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			logger.Infof("ACL configuration file %s does not exist", cfgfile)
+			return nil
+		}
 	}
 
-	logger.Infof("Load proxy rules from %s", filepath)
+	logger.Infof("Load proxy rules from %s", cfgfile)
 
-	f, err := os.Open(filepath)
+	f, err := os.Open(cfgfile)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 
-	var cfg Config
+	var cfg ACLConfig
 	dec := yaml.NewDecoder(f)
 	if err := dec.Decode(&cfg); err != nil {
 		return err
