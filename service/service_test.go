@@ -95,9 +95,10 @@ func (t *serviceSuite) TestRevokeToken(c *C) {
 	s := session.New(opt.Spool, true)
 	defer s.Discard()
 
-	msg := messages.NewRevokeToken(s.Id)
-	t.ch <- msg
-	res := <-msg.Rch
+	res := <-messages.New(
+		&messages.RevokeToken{Id: s.Id},
+		&messages.RevokeTokenResult{},
+	).Send(t.ch).Receive()
 
 	c.Assert(res.Err, IsNil)
 	c.Assert(res.SpoolPath, Equals, "/my/spool")
@@ -121,9 +122,10 @@ func (t *serviceSuite) TestRevokeTokenInvalidSession(c *C) {
 	err := svc.Start()
 	c.Assert(err, IsNil)
 
-	msg := messages.NewRevokeToken("invalid-session")
-	t.ch <- msg
-	res := <-msg.Rch
+	res := <-messages.New(
+		&messages.RevokeToken{Id: "invalid-session"},
+		&messages.RevokeTokenResult{},
+	).Send(t.ch).Receive()
 
 	c.Assert(res.Err.Error(), Equals, "session not found")
 

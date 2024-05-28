@@ -115,9 +115,10 @@ func (c *Server) deleteSessionToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logger.Debug("revoke token")
-	msg := messages.NewRevokeToken(id)
-	c.ch <- msg
-	res := <-msg.Rch
+	res := <-messages.New(
+		&messages.RevokeToken{Id: id},
+		&messages.RevokeTokenResult{},
+	).Send(c.ch).Receive()
 
 	if res.Err != nil {
 		if res.Err == messages.ErrSessionNotFound {

@@ -218,8 +218,8 @@ func (svc *Service) Start() error {
 					v.Rch <- messages.SessionCredentials{Id: s.Id, Token: s.Token}
 					svc.sCount.Add(1)
 
-				case messages.RevokeToken:
-					sessionId := v.Id
+				case messages.Message[*messages.RevokeToken, messages.RevokeTokenResult]:
+					sessionId := v.Msg.Id
 					s := session.GetSession(sessionId)
 					if s == nil {
 						svc.sErrors.Add(1)

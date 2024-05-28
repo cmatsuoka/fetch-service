@@ -20,8 +20,11 @@
 package snap
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 
 	. "github.com/canonical/fetch-service/inspectors/common"
@@ -55,14 +58,70 @@ func (ins SnapInfoInspector) InspectRequest(a *metadata.Artefact) error {
 			},
 		)
 	} else if _, err := newSnapRefreshUrlInfo(u); err == nil {
+
+		var request_body string
+		a.Request.Body, err = newRefreshRequestHandler(ins, a.Request, &request_body)
+		if err != nil {
+			return fmt.Errorf("cannot handle refresh request: %w", err)
+		}
 		a.Hold(ins, "valid URL for snap refresh endpoint").Annotate(
 			metadata.Annotation{
-				"type": "refresh",
+				"type":         "refresh",
+				"request-body": request_body,
 			},
 		)
 	}
 
 	return nil // we don't recognize this request
+}
+
+// refreshRequestHandler is a ReaderCloser that decodes the body of
+type refreshRequestHandler struct {
+	body io.ReadCloser // request body
+}
+
+func newRefreshRequestHandler(ins metadata.Identifiable, req *http.Request, request_body *string) (*refreshRequestHandler, error) {
+	/*
+		isGzipped := req.Header.Get("Content-Encoding") == "gzip"
+
+			// Handle gzip encoding
+			if isGzipped {
+				logger.Debugf("upload-pack request body is gzipped")
+				gzipReader, err := gzip.NewReader(req.Body)
+				if err != nil {
+					return nil, fmt.Errorf("cannot create upload pack gzip decoder: %w", err)
+				}
+
+				req.Body = gzipReader
+				req.Header.Del("Content-Encoding")
+			}
+	*/
+
+	// Copy input buffer
+	buf, err := io.ReadAll(req.Body)
+	req.Body.Close()
+	if err != nil {
+		return nil, fmt.Errorf("cannot read upload pack request body: %w", err)
+	}
+	req.ContentLength = int64(len(buf))
+
+	*request_body = string(buf)
+
+	h := &refreshRequestHandler{
+		body: io.NopCloser(bytes.NewReader(buf)),
+	}
+
+	return h, nil
+}
+
+func (h *refreshRequestHandler) Read(b []byte) (n int, err error) {
+	n, err = h.body.Read(b)
+	return
+}
+
+// Close finalizes the request.
+func (h *refreshRequestHandler) Close() error {
+	return h.body.Close()
 }
 
 type snapInfoBody struct {

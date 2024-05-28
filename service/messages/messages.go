@@ -26,6 +26,24 @@ import (
 	"github.com/canonical/fetch-service/metadata"
 )
 
+type Message[T any, R any] struct {
+	Msg T
+	Rch chan R
+}
+
+func New[T any, R any](msg T, res *R) *Message[T, R] {
+	return &Message[T, R]{msg, make(chan R, 1)}
+}
+
+func (msg *Message[T, R]) Send(ch chan any) *Message[T, R] {
+	ch <- msg
+	return msg
+}
+
+func (msg *Message[T, R]) Receive() chan R {
+	return msg.Rch
+}
+
 // ProxyAuth contains credentials for basic authentication.
 type ProxyAuth struct {
 	Rch chan bool // return channel
@@ -123,15 +141,7 @@ func NewCreateSession(policy string, timeout uint64) CreateSession {
 // Revoke session token
 
 type RevokeToken struct {
-	Rch chan RevokeTokenResult // Handler response channel
-	Id  string
-}
-
-func NewRevokeToken(sessionId string) RevokeToken {
-	return RevokeToken{
-		Rch: make(chan RevokeTokenResult, 1),
-		Id:  sessionId,
-	}
+	Id string
 }
 
 type RevokeTokenResult struct {
