@@ -29,11 +29,13 @@ import (
 	"strings"
 	"sync"
 
+	apt_cfg "github.com/canonical/fetch-service/inspectors/apt/config"
 	. "github.com/canonical/fetch-service/inspectors/common"
 	"github.com/canonical/fetch-service/inspectors/mimetypes"
 	"github.com/canonical/fetch-service/logger"
 	"github.com/canonical/fetch-service/metadata"
 	"github.com/canonical/fetch-service/metadata/opinions"
+	"github.com/canonical/fetch-service/service/config"
 )
 
 // Distribution Release/InRelease file
@@ -108,12 +110,14 @@ func (ins *AptReleaseInspector) InspectRequest(a *metadata.Artefact) error {
 		return fmt.Errorf("cannot parse URL: %s", err)
 	}
 
-	if info, err := newInReleaseUrlInfo(u); err == nil {
+	cfg := config.GetInspectorsConfig()
+
+	if info, err := apt_cfg.NewInReleaseUrlInfo(u, &cfg.Apt); err == nil {
 		a.SetRequestOpinion(ins.ID(), opinions.Pending, "valid URL for Release file").Annotate(
 			metadata.Annotation{
-				"origin":     info.origin,
-				"repository": info.repository,
-				"dist":       info.dist,
+				"origin":     info.Origin,
+				"repository": info.Repository,
+				"dist":       info.Dist,
 			},
 		)
 	} else if info, err := newPackagesUrlInfo(u); err == nil {
