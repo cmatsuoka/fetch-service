@@ -35,7 +35,6 @@ import (
 	"github.com/canonical/fetch-service/logger"
 	"github.com/canonical/fetch-service/metadata"
 	"github.com/canonical/fetch-service/metadata/opinions"
-	"github.com/canonical/fetch-service/service/config"
 )
 
 // Distribution Release/InRelease file
@@ -90,11 +89,14 @@ type AptReleaseInspector struct {
 	release map[string]releaseFile // map repository to release file
 
 	releaseLock sync.Mutex
+
+	config apt_cfg.AptInspectorConfig
 }
 
-func NewAptReleaseInspector() *AptReleaseInspector {
+func NewAptReleaseInspector(cfg apt_cfg.AptInspectorConfig) *AptReleaseInspector {
 	return &AptReleaseInspector{
 		release: make(map[string]releaseFile),
+		config:  cfg,
 	}
 }
 
@@ -110,9 +112,7 @@ func (ins *AptReleaseInspector) InspectRequest(a *metadata.Artefact) error {
 		return fmt.Errorf("cannot parse URL: %s", err)
 	}
 
-	cfg := config.GetInspectorsConfig()
-
-	if info, err := apt_cfg.NewInReleaseUrlInfo(u, &cfg.Apt); err == nil {
+	if info, err := apt_cfg.NewInReleaseUrlInfo(u, &ins.config); err == nil {
 		a.SetRequestOpinion(ins.ID(), opinions.Pending, "valid URL for Release file").Annotate(
 			metadata.Annotation{
 				"origin":     info.Origin,

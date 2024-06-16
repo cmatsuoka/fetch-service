@@ -31,6 +31,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/fetch-service/inspectors/apt"
+	apt_cfg "github.com/canonical/fetch-service/inspectors/apt/config"
 	"github.com/canonical/fetch-service/inspectors/mimetypes"
 	"github.com/canonical/fetch-service/metadata"
 	"github.com/canonical/fetch-service/metadata/opinions"
@@ -94,7 +95,8 @@ func (s *aptSuite) TestAptReleaseArtefactInspector(c *C) {
 
 		f := strings.NewReader(tc.data)
 
-		ins := apt.NewAptReleaseInspector()
+		cfg := apt_cfg.AptInspectorConfig{}
+		ins := apt.NewAptReleaseInspector(cfg)
 		err := ins.InspectArtefact(f, a)
 		c.Assert(err, IsNil)
 
@@ -172,7 +174,8 @@ func (s *aptSuite) TestAptTranslationArtefactInspector(c *C) {
 
 		f_release := strings.NewReader(inReleaseArtefactData)
 
-		ins := apt.NewAptReleaseInspector()
+		cfg := apt_cfg.AptInspectorConfig{}
+		ins := apt.NewAptReleaseInspector(cfg)
 		err = ins.InspectArtefact(f_release, a_release)
 		c.Assert(err, IsNil)
 
@@ -224,7 +227,8 @@ func (s *aptSuite) TestAptReleasePackagesValidation(c *C) {
 		},
 	}
 
-	ins := apt.NewAptReleaseInspector()
+	cfg := apt_cfg.AptInspectorConfig{}
+	ins := apt.NewAptReleaseInspector(cfg)
 	ins.SetRelease(map[string]apt.ReleaseFile{"http://archive.ubuntu.com/ubuntu/dists/jammy": rf})
 	err := ins.InspectArtefact(f, a)
 	c.Assert(err, IsNil)
@@ -263,7 +267,8 @@ func (s *aptSuite) TestAptReleaseTranslationValidation(c *C) {
 		},
 	}
 
-	ins := apt.NewAptReleaseInspector()
+	cfg := apt_cfg.AptInspectorConfig{}
+	ins := apt.NewAptReleaseInspector(cfg)
 	ins.SetRelease(map[string]apt.ReleaseFile{"http://archive.ubuntu.com/ubuntu/dists/jammy": rf})
 	err := ins.InspectArtefact(f, a)
 	c.Assert(err, IsNil)
@@ -302,7 +307,8 @@ func (s *aptSuite) TestAptReleaseSignature(c *C) {
 	defer os.Setenv("FETCH_APT_RELEASE_PUBLIC_KEY", prev)
 	os.Setenv("FETCH_APT_RELEASE_PUBLIC_KEY", publicKey)
 
-	ins := apt.NewAptReleaseInspector()
+	cfg := apt_cfg.AptInspectorConfig{}
+	ins := apt.NewAptReleaseInspector(cfg)
 	err = ins.InspectArtefact(r, a)
 	c.Assert(err, IsNil)
 

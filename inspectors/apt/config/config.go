@@ -85,7 +85,7 @@ func checkRepositoryAndDist(cfg *AptInspectorConfig, u *url.URL) (string, string
 	return repo, dist, nil
 }
 
-// distIsAllowed verifies if the given repository matches an allowed pattern.
+// repositoryIsAllowed verifies if the given repository matches an allowed pattern.
 func repositoryIsAllowed(cfg *AptInspectorConfig, repo string) bool {
 	for name, r := range cfg.Repositories {
 		logger.Debugf("apt inspector config: parsing repository '%s'", name)
