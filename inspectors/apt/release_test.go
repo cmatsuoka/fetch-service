@@ -80,7 +80,7 @@ func (s *aptSuite) TestAptReleaseArtefactInspector(c *C) {
 		{inReleaseArtefactData, false, false},
 		{"some arbitrary data", true, false},
 	} {
-		restorer := apt.MockCheckSignature(func(f io.ReadSeeker, notes metadata.Annotation) (io.ReadSeeker, error) {
+		restorer := apt.MockCheckSignature(func(f io.ReadSeeker, notes metadata.Annotation, pubkey string) (io.ReadSeeker, error) {
 			if !tc.validSig {
 				return f, errors.New("invalid signature")
 			}
@@ -157,7 +157,7 @@ func (s *aptSuite) TestAptTranslationArtefactInspector(c *C) {
 		{inReleaseArtefactData, "tests/Translation-zh_TW-bad.xz", "1b4001d827461c64c63e9b0cba4604e0f494171be2dd310018b456a03f8c6ca5", 792, false},
 		{inReleaseArtefactData, "tests/Translation-zh_TW-bad.xz", "1b4001d827461c64c63e9b0cba4604e0f494171be2dd310018b456a03f8c6ca5", 600, false},
 	} {
-		restorer := apt.MockCheckSignature(func(f io.ReadSeeker, notes metadata.Annotation) (io.ReadSeeker, error) {
+		restorer := apt.MockCheckSignature(func(f io.ReadSeeker, notes metadata.Annotation, pubkey string) (io.ReadSeeker, error) {
 			return f, nil
 		})
 		defer restorer()

@@ -60,65 +60,66 @@ type AptInspectorConfig struct {
 	Repositories map[string]AptInspectorConfigRepository
 }
 
-func checkRepositoryAndDist(cfg *AptInspectorConfig, u *url.URL) (string, string, error) {
+func checkRepositoryAndDist(cfg *AptInspectorConfig, u *url.URL) (string, string, string, error) {
 	repo := fmt.Sprintf("%s://%s", u.Scheme, u.Host)
 	parts := strings.Split(u.Path, "/")
 
 	pos := slices.Index(parts, "dists")
 	if pos < 0 || len(parts) <= pos+2 {
-		return "", "", fmt.Errorf("invalid repository URL %s", u.String())
+		return "", "", "", fmt.Errorf("invalid repository URL %s", u.String())
 	}
 	dist := parts[pos+1]
 
-	for _, p := range parts {
-		repo += fmt.Sprintf("/%s", p)
+	repo += strings.Join(parts[:pos], "/")
+	repoCfgName, ok := repositoryIsAllowed(cfg, repo)
+	if !ok {
+		return "", "", "", fmt.Errorf("invalid repository %s", repo)
 	}
 
-	if ok := repositoryIsAllowed(cfg, repo); !ok {
-		return "", "", fmt.Errorf("invalid repository %s", repo)
+	if ok := distIsAllowed(cfg, repoCfgName, dist); !ok {
+		return "", "", "", fmt.Errorf("invalid dist %s", dist)
 	}
 
-	if ok := distIsAllowed(cfg, dist); !ok {
-		return "", "", fmt.Errorf("invalid dist %s", dist)
-	}
-
-	return repo, dist, nil
+	return repoCfgName, repo, dist, nil
 }
 
 // repositoryIsAllowed verifies if the given repository matches an allowed pattern.
-func repositoryIsAllowed(cfg *AptInspectorConfig, repo string) bool {
+func repositoryIsAllowed(cfg *AptInspectorConfig, repo string) (string, bool) {
+	logger.Debugf("apt inspector config: check repository '%s'", repo)
 	for name, r := range cfg.Repositories {
-		logger.Debugf("apt inspector config: parsing repository '%s'", name)
+		logger.Debugf("apt inspector config: check repository entry '%s'", name)
 		for _, pattern := range r.Urls {
 			if pattern.g.Match(repo) {
-				return true
+				logger.Debugf("apt inspector config: found repository '%s'", repo)
+				return name, true
 			}
 		}
 	}
-	return false
+	return "", false
 }
 
 // distIsAllowed verifies if the given dist matches an allowed pattern.
-func distIsAllowed(cfg *AptInspectorConfig, dist string) bool {
-	for name, r := range cfg.Repositories {
-		logger.Debugf("apt inspector config: parsing repository '%s'", name)
-		for _, pattern := range r.Dists {
-			if pattern.g.Match(dist) {
-				return true
-			}
+func distIsAllowed(cfg *AptInspectorConfig, name, dist string) bool {
+	r := cfg.Repositories[name]
+	logger.Debugf("apt inspector config: parsing repository '%s'", name)
+	for _, pattern := range r.Dists {
+		if pattern.g.Match(dist) {
+			logger.Debugf("apt inspector config: found dist '%s'", dist)
+			return true
 		}
 	}
 	return false
 }
 
 type InReleaseUrlInfo struct {
+	CfgName    string
 	Origin     string
 	Repository string
 	Dist       string
 }
 
 func NewInReleaseUrlInfo(u *url.URL, cfg *AptInspectorConfig) (*InReleaseUrlInfo, error) {
-	repo, dist, err := checkRepositoryAndDist(cfg, u)
+	name, repo, dist, err := checkRepositoryAndDist(cfg, u)
 	if err != nil {
 		return nil, err
 	}
@@ -129,6 +130,7 @@ func NewInReleaseUrlInfo(u *url.URL, cfg *AptInspectorConfig) (*InReleaseUrlInfo
 	}
 
 	info := &InReleaseUrlInfo{
+		CfgName:    name,
 		Origin:     fmt.Sprintf("%s://%s", u.Scheme, u.Host),
 		Repository: repo,
 		Dist:       dist,
