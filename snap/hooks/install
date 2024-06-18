@@ -6,7 +6,7 @@ rm -Rf "${SNAP_COMMON}/spool"
 mkdir -m 0700 "${SNAP_COMMON}/spool"
 
 # Initial ACL rules
-cat <<EOF > "${SNAP_DATA}/acl.yaml"
+cat <<EOF >"${SNAP_DATA}/acl.yaml"
 http-proxy:
   policy: allow
   rules:
@@ -14,3 +14,13 @@ http-proxy:
       ]
       access: deny
 EOF
+
+# Generate certificates
+rm -Rf "${SNAP_COMMON}/certs"
+mkdir -m 0700 "${SNAP_COMMON}/certs"
+
+cd "${SNAP_COMMON}/certs"
+openssl genrsa -aes256 -passout pass:1 -out ca.key.pem 4096
+openssl rsa -passin pass:1 -in ca.key.pem -out ca.key.pem.tmp
+mv ca.key.pem.tmp ca.key.pem
+openssl req -subj "/CN=root@localhost" -key ca.key.pem -new -x509 -days 7300 -sha256 -extensions v3_ca -out ca.pem

@@ -106,7 +106,11 @@ func main() {
 		pp.Start()
 	}
 
-	svc := service.New(&opt)
+	svc, err := service.New(&opt)
+	if err != nil {
+		logger.Fatalf("Cannot create service: %s", err)
+	}
+
 	if err := svc.Start(); err != nil {
 		logger.Fatalf("Cannot start service: %s", err)
 	}

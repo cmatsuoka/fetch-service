@@ -1,11 +1,11 @@
 #!/bin/bash -e
 
 ACL_YAML="${SNAP_DATA}/acl.yaml"
-
-[ -f "$ACL_YAML" ] && exit 0
+CA_CERT="${SNAP_DATA}/certs/local-ca.crt"
 
 # Create an acl file if it doesn't exist
-cat <<EOF >"$ACL_YAML"
+if [ ! -f "$ACL_YAML" ]; then
+	cat <<EOF >"$ACL_YAML"
 http-proxy:
   policy: allow
   rules:
@@ -13,3 +13,17 @@ http-proxy:
       ]
       access: deny
 EOF
+fi
+
+# Create a CA certificate if it doesn't exist
+if [ ! -f "$CA_CERT" ]; then
+	mkdir -p "$CA_CERT"
+	chmod 0700 "$CA_CERT"
+	(
+		cd "$CA_CERT"
+		openssl genrsa -aes256 -passout pass:1 -out ca.key.pem 4096
+		openssl rsa -passin pass:1 -in ca.key.pem -out ca.key.pem.tmp
+		mv ca.key.pem.tmp ca.key.pem
+		openssl req -subj "/CN=root@localhost" -key ca.key.pem -new -x509 -days 7300 -sha256 -extensions v3_ca -out ca.pem
+	)
+fi
