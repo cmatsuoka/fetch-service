@@ -179,15 +179,6 @@ func (insps Inspectors) RunArtefactInspectors(dir string, a *metadata.Artefact) 
 	return nil
 }
 
-func (insps Inspectors) GetInspector(id string) (Inspector, error) {
-	ins, ok := insps.insmap[id]
-	if !ok {
-		return nil, fmt.Errorf("inspector '%s' not registered", id)
-	}
-
-	return ins, nil
-}
-
 // List returns the list of all registered inspector IDs.
 func (insps Inspectors) List() []string {
 	return insps.ids

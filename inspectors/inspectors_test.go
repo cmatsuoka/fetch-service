@@ -1,7 +1,7 @@
 // -*- Mode: Go; indent-tabs-mode: t -*-
 
 /*
- * Copyright 2023 Canonical Ltd.
+ * Copyright 2023-2024 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -50,84 +50,85 @@ func (t *inspectorsSuite) SetUpTest(c *C) {
 var _ = Suite(&inspectorsSuite{})
 
 func (t *inspectorsSuite) TestRunRequestInspectors(c *C) {
-	a := metadata.NewArtefact()
+	for _, tc := range []struct {
+		url    string
+		errMsg string
+	}{
+		{"http://some.url", ""},
+		{":not-a-url", "cannot parse URL:.*"},
+	} {
+		a := metadata.NewArtefact()
+		a.CurrentDownload.URL = tc.url
 
-	s := session.New(c.MkDir(), false)
-	defer s.Discard()
+		s := session.New(c.MkDir(), false)
+		defer s.Discard()
 
-	err := s.Insps.RunRequestInspectors(a)
-	c.Assert(err, IsNil)
-	c.Assert(len(a.RequestInspection), Equals, 1)
-	c.Assert(a.RequestInspection["default"], DeepEquals, &Inspection{
-		Opinion: opinions.Unknown,
-		Reason:  "the request was not recognized by any format inspector",
-	})
-}
+		err := s.Insps.RunRequestInspectors(a)
 
-func (t *inspectorsSuite) TestRunRequestInspectorsPermissive(c *C) {
-	a := metadata.NewArtefact()
-
-	s := session.New(c.MkDir(), true)
-	defer s.Discard()
-
-	err := s.Insps.RunRequestInspectors(a)
-	c.Assert(err, IsNil)
-	c.Assert(len(a.RequestInspection), Equals, 1)
-	c.Assert(a.RequestInspection["default"], DeepEquals, &Inspection{
-		Opinion: opinions.Unknown,
-		Reason:  "the request was not recognized by any format inspector",
-	})
+		if tc.errMsg == "" {
+			c.Assert(err, IsNil)
+			c.Assert(len(a.RequestInspection), Equals, 1)
+			c.Assert(a.RequestInspection["default"], DeepEquals, &Inspection{
+				Opinion: opinions.Unknown,
+				Reason:  "the request was not recognized by any format inspector",
+			})
+		} else {
+			c.Assert(err, ErrorMatches, tc.errMsg)
+		}
+	}
 }
 
 func (t *inspectorsSuite) TestRunArtefactInspectors(c *C) {
-	dir := c.MkDir()
-	data := []byte("Measure twice, saw once.\n")
-	err := os.WriteFile(filepath.Join(dir, "c1de7d7ad587318b4674ed029c7d22e33ce90268ca32c5b3dd1cff36511c7950.data"), data, 0644)
-	c.Assert(err, IsNil)
+	for _, tc := range []struct {
+		permissive bool
+		pending    bool // Whether the request opinion is pending
+		fileExists bool
+		errMsg     string
+	}{
+		{true, true, true, ""},
+		{true, true, false, "open .*: no such file or directory"},
+		{true, false, true, ""},
+		{false, true, true, ""},
+		{false, false, true, ""}, // failed request inspection in strict mode
+	} {
+		dir := c.MkDir()
+		data := []byte("Measure twice, saw once.\n")
+		if tc.fileExists {
+			err := os.WriteFile(filepath.Join(dir, "c1de7d7ad587318b4674ed029c7d22e33ce90268ca32c5b3dd1cff36511c7950.data"), data, 0644)
+			c.Assert(err, IsNil)
+		}
 
-	h, _ := digests.NewSha256Digest(MySha256)
-	a := metadata.NewArtefact()
-	a.CurrentDownload.ContentType = "text/plain"
-	a.CurrentDownload.Sha256 = h
-	a.Metadata.Sha256 = h
+		h, _ := digests.NewSha256Digest(MySha256)
+		a := metadata.NewArtefact()
+		a.CurrentDownload.ContentType = "text/plain"
+		a.CurrentDownload.Sha256 = h
+		a.CurrentDownload.URL = "http://some.url"
+		a.Metadata.Sha256 = h
 
-	s := session.New(c.MkDir(), false)
-	defer s.Discard()
+		s := session.New(dir, tc.permissive)
+		defer s.Discard()
 
-	err = s.Insps.RunArtefactInspectors(dir, a)
-	c.Assert(err, Equals, nil)
-	c.Assert(a.Metadata.Type, Equals, "text/plain; charset=utf-8")
-	c.Assert(len(a.ResponseInspection), Equals, 1)
-	c.Assert(a.ResponseInspection["default"], DeepEquals, &Inspection{
-		Opinion: opinions.Unknown,
-		Reason:  "the artefact format is unknown",
-	})
-	c.Assert(a.Rejected(), Equals, true)
+		err := s.Insps.RunArtefactInspectors(dir, a)
+
+		if tc.errMsg == "" {
+			c.Assert(err, IsNil)
+			c.Check(a.Metadata.Type, Equals, "text/plain; charset=utf-8")
+			c.Check(len(a.ResponseInspection), Equals, 1)
+			c.Check(a.ResponseInspection["default"], DeepEquals, &Inspection{
+				Opinion: opinions.Unknown,
+				Reason:  "the artefact format is unknown",
+			})
+		} else {
+			c.Assert(err, ErrorMatches, tc.errMsg)
+		}
+		c.Assert(a.Rejected(), Equals, true)
+	}
 }
 
-func (t *inspectorsSuite) TestRunArtefactInspectorsPermissive(c *C) {
-	dir := c.MkDir()
-	data := []byte("Measure twice, saw once.\n")
-	err := os.WriteFile(filepath.Join(dir, "c1de7d7ad587318b4674ed029c7d22e33ce90268ca32c5b3dd1cff36511c7950.data"), data, 0644)
-	c.Assert(err, IsNil)
-
-	h, _ := digests.NewSha256Digest(MySha256)
-	a := metadata.NewArtefact()
-	a.CurrentDownload.ContentType = "text/plain"
-	a.CurrentDownload.Sha256 = h
-	a.CurrentDownload.URL = "http://some.url"
-	a.Metadata.Sha256 = h
-
-	s := session.New(dir, true)
+func (t *inspectorsSuite) TestList(c *C) {
+	s := session.New("", true)
 	defer s.Discard()
 
-	err = s.Insps.RunArtefactInspectors(dir, a)
-	c.Assert(err, IsNil)
-	c.Assert(a.Metadata.Type, Equals, "text/plain; charset=utf-8")
-	c.Assert(len(a.ResponseInspection), Equals, 1)
-	c.Assert(a.ResponseInspection["default"], DeepEquals, &Inspection{
-		Opinion: opinions.Unknown,
-		Reason:  "the artefact format is unknown",
-	})
-	c.Assert(a.Rejected(), Equals, true)
+	insps := s.Insps.List()
+	c.Assert(len(insps), Equals, 18)
 }

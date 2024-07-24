@@ -1,7 +1,7 @@
 // -*- Mode: Go; indent-tabs-mode: t -*-
 
 /*
- * Copyright 2023 Canonical Ltd.
+ * Copyright 2023-2024 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -72,6 +72,9 @@ var opts struct {
 
 	// Private key for the MITM proxy
 	KeyPath string `long:"key" description:"The path to a file containing the HTTPS proxy private key"`
+
+	// Inspect an artefact instead of running the service (for debugging)
+	Inspect string `long:"inspect" description:"Inspect an artefact and exit"`
 }
 
 func main() {
@@ -102,6 +105,14 @@ func main() {
 	pp := profile.NewProfiler(opts.ProfilePort)
 	if opts.Profile {
 		pp.Start()
+	}
+
+	if opts.Inspect != "" {
+		if err := inspectArtefact(opts.Inspect); err != nil {
+			logger.Errorf("error inspecting artefact: %s", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
 	}
 
 	cert, key, err := loadCertificate(opts.CertPath, opts.KeyPath)
