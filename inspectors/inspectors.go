@@ -83,6 +83,7 @@ func New(permissive bool) Inspectors {
 		// go
 		// must run after git
 		gomod.NewGoModuleGitInspector(),
+		gomod.NewImportRedirectorInspector(),
 
 		// rust
 		cargo.NewIndexInspector(),

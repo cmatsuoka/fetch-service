@@ -39,7 +39,8 @@ var (
 		regexp.MustCompile(`^https://go\.googlesource\.com:443$`),
 	}
 
-	reGoModuleGit = regexp.MustCompile(`^/([^/]+/)?([^/]+)/git-upload-pack$`)
+	reGoModuleGit      = regexp.MustCompile(`^/([^/]+/)?([^/]+)/git-upload-pack$`)
+	reImportRedirector = regexp.MustCompile(`^/([^/]+/)?([^?]+)$`)
 )
 
 func checkValidOrigin(u *url.URL) error {
@@ -66,6 +67,26 @@ func newGoModuleGitUrlInfo(u *url.URL) (*goModuleUrlInfo, error) {
 		return nil, fmt.Errorf("%s: not a valid URL path for git go modules", u.Path)
 	}
 	info := &goModuleUrlInfo{
+		project: m[len(m)-1],
+	}
+
+	return info, nil
+}
+
+type importRedirectorUrlInfo struct {
+	project string
+}
+
+func newImportRedirectorUrlInfo(u *url.URL) (*importRedirectorUrlInfo, error) {
+	if err := checkValidOrigin(u); err != nil {
+		return nil, err
+	}
+
+	m := reImportRedirector.FindStringSubmatch(u.Path)
+	if len(m) != 3 && len(m) != 2 {
+		return nil, fmt.Errorf("%s: not a valid URL path for go import redirector", u.Path)
+	}
+	info := &importRedirectorUrlInfo{
 		project: m[len(m)-1],
 	}
 
