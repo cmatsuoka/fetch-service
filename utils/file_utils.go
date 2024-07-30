@@ -65,6 +65,10 @@ func ZipMatches(in io.ReaderAt, size int64, patterns []*regexp.Regexp) bool {
 func GetLicense(filename string) (string, error) {
 	var license string
 
+	if _, err := os.Stat(filename); err != nil {
+		return "", err
+	}
+
 	cmd := []string{"licensecheck", "--machine", "--shortname-scheme=spdx", filename}
 	logger.Debugf("check license: %v", cmd)
 	out, err := exec.Command(cmd[0], cmd[1:]...).Output()
