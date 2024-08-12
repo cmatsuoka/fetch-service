@@ -41,7 +41,8 @@ import (
 )
 
 const (
-	DefaultSessionTimeout = time.Duration(6 * time.Hour)
+	//DefaultSessionTimeout = time.Duration(6 * time.Hour)
+	DefaultSessionTimeout = time.Duration(1 * time.Minute)
 )
 
 var (
