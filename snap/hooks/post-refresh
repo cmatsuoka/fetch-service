@@ -13,11 +13,5 @@ fi
 
 # Create an acl file if it doesn't exist
 if [ ! -f "$ACL_YAML" ]; then
-	cat <<EOF >"$ACL_YAML"
-http-proxy:
-  policy: allow
-  rules:
-    - dst: [
-      ]
-      access: deny
-EOF
+	cp "${SNAP}/skel/acl.yaml" "$ACL_YAML"
+fi

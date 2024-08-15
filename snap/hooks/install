@@ -9,11 +9,4 @@ mkdir -m 0700 "${SNAP_COMMON}/spool"
 
 # Initial ACL rules
 mkdir -p $(dirname "$ACL_YAML")
-cat <<EOF >"$ACL_YAML"
-http-proxy:
-  policy: allow
-  rules:
-    - dst: [
-      ]
-      access: deny
-EOF
+cp "${SNAP}/skel/acl.yaml" "$ACL_YAML"
