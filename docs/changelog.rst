@@ -2,6 +2,11 @@
 Changelog
 *********
 
+0.1.5 (2024-08-15)
+------------------
+
+- chore(snap): use skel files for initial configuration
+
 0.1.4 (2024-07-30)
 ------------------
 
