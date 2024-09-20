@@ -315,8 +315,7 @@ func (ins *UploadPackInspector) InspectArtefact(f ArtefactReader, a ResponseArte
 		notes.Add("server-response", server_msgs)
 
 		if !isShallow {
-			a.SetResponseRejected(ins,
-				"fetch is only allowed with depth 1").Annotate(notes)
+			a.SetResponseRejected(ins, "fetch is only allowed with depth 1").Annotate(notes)
 			return nil
 		}
 
@@ -326,7 +325,6 @@ func (ins *UploadPackInspector) InspectArtefact(f ArtefactReader, a ResponseArte
 			return nil
 		}
 
-		notes.Add("server-response", server_msgs)
 		a.SetResponseUnknown(ins, "git fetch response is valid but content is unknown").Annotate(notes)
 
 	default:
