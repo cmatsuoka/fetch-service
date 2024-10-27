@@ -154,6 +154,13 @@ func (ins *GoModuleGitInspector) InspectArtefact(f ArtefactReader, a ResponseArt
 		return errors.New("cannot read is-shallow annotation")
 	}
 
+	// Unshallow is unsupported
+	unshallow, ok := a.ResponseBoolAnnotation(GitUploadPackID, "unshallow")
+	if ok && unshallow {
+		a.SetResponseRejected(ins, "unshallow is not supported").Annotate(notes)
+		return nil
+	}
+
 	// Unpack and checkout in temporary directory
 	dir, err := os.MkdirTemp("", "fetch-")
 	if err != nil {
@@ -164,7 +171,8 @@ func (ins *GoModuleGitInspector) InspectArtefact(f ArtefactReader, a ResponseArt
 	defer os.RemoveAll(dir)
 
 	if err = git.UnpackObjects(f, dir); err != nil {
-		return fmt.Errorf("git unpack error: %w", err)
+		a.SetResponseRejected(ins, "error unpacking objects: %s", err).Annotate(notes)
+		return nil
 	}
 
 	if has_wants {
@@ -176,15 +184,13 @@ func (ins *GoModuleGitInspector) InspectArtefact(f ArtefactReader, a ResponseArt
 		}
 	} else {
 		// check out wanted-ref
-		a.SetResponseRejected(ins,
-			"want-refs handling not implemented yet").Annotate(notes)
+		a.SetResponseRejected(ins, "want-refs handling not implemented yet").Annotate(notes)
 		return nil
 	}
 
 	goModPath := filepath.Join(dir, "go.mod")
 	if _, err := os.Stat(goModPath); err != nil {
-		a.SetResponseUnknown(ins,
-			"git repository does not contain a go.mod file")
+		a.SetResponseUnknown(ins, "git repository does not contain a go.mod file")
 		return nil
 	}
 

@@ -244,7 +244,8 @@ func (ins *UploadPackInspector) InspectArtefact(f ArtefactReader, a ResponseArte
 
 		msgs, err := decodeGitProtocol(f)
 		if err != nil {
-			return err
+			a.SetResponseRejected(ins, "cannot decode git protocol: %s", err)
+			return nil
 		}
 
 		refs := []string{}
@@ -307,17 +308,25 @@ func (ins *UploadPackInspector) InspectArtefact(f ArtefactReader, a ResponseArte
 
 		server_msgs := []string{}
 		isShallow := false
+		unshallow := false
 		for _, msg := range msgs {
 			if strings.HasPrefix(msg, "shallow ") {
 				isShallow = true
+			} else if strings.HasPrefix(msg, "unshallow ") {
+				unshallow = true
 			}
 			server_msgs = append(server_msgs, strings.TrimSpace(msg))
 		}
 		notes.Add("server-response", server_msgs)
 
 		if !isShallow {
-			a.SetResponseRejected(ins,
-				"fetch is only allowed with depth 1").Annotate(notes)
+			a.SetResponseRejected(ins, "fetch is only allowed with depth 1").Annotate(notes)
+			return nil
+		}
+
+		if unshallow {
+			notes.Add("unshallow", unshallow)
+			a.SetResponseRejected(ins, "unshallow is not supported").Annotate(notes)
 			return nil
 		}
 

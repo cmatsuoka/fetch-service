@@ -157,6 +157,13 @@ func (ins *RockcraftInspector) InspectArtefact(f ArtefactReader, a ResponseArtef
 		return nil
 	}
 
+	// Unshallow is unsupported
+	unshallow, ok := a.ResponseBoolAnnotation(GitUploadPackID, "unshallow")
+	if ok && unshallow {
+		a.SetResponseRejected(ins, "unshallow is not supported").Annotate(notes)
+		return nil
+	}
+
 	// Unpack and checkout in temporary directory
 	// FIXME: unpack once for all inspectors
 	dir, err := os.MkdirTemp("", "fetch-")
