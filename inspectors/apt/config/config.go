@@ -20,11 +20,15 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"regexp"
 	"slices"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/fetch-service/glob"
 	"github.com/canonical/fetch-service/logger"
@@ -40,6 +44,32 @@ type AptInspectorConfigRepository struct {
 
 type AptInspectorConfig struct {
 	Repositories map[string]AptInspectorConfigRepository
+}
+
+type InspectorConfig struct {
+	Apt AptInspectorConfig `yaml:"apt"`
+}
+
+func LoadConfig(filename string) (AptInspectorConfig, error) {
+	cfg := InspectorConfig{}
+	cfg.Apt.Repositories = map[string]AptInspectorConfigRepository{}
+
+	f, err := os.Open(filename)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			logger.Infof("apt inspectors configuration file %s does not exist", filename)
+			return cfg.Apt, nil
+		}
+	}
+	defer f.Close()
+
+	logger.Infof("Load apt inspectors configuration from %s", filename)
+
+	dec := yaml.NewDecoder(f)
+	if err := dec.Decode(&cfg); err != nil {
+		return cfg.Apt, err
+	}
+	return cfg.Apt, nil
 }
 
 func checkRepositoryAndDist(cfg *AptInspectorConfig, u *url.URL) (string, string, string, error) {

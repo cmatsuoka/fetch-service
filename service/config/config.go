@@ -22,6 +22,7 @@ package config
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -273,7 +274,24 @@ type InspectorsConfig struct {
 	Snap   snap_cfg.SnapInspectorConfig     `yaml:"snap"`
 }
 
+func LoadBaseInspectorsConfig(cfgdir string) (*InspectorsConfig, error) {
+	inspCfgdir := filepath.Join(cfgdir, "inspectors")
+
+	aptCfg, err := apt_cfg.LoadConfig(filepath.Join(inspCfgdir, "apt.yaml"))
+	if err != nil {
+		return nil, fmt.Errorf("cannot load apt configuration: %w", err)
+	}
+
+	return &InspectorsConfig{
+		Apt: aptCfg,
+		//Git:    gitCfg,
+		//Crafts: craftsCfg,
+		//Snap:   snapCfg,
+	}, nil
+}
+
 func LoadInspectorsConfig(cfgdir string) error {
+
 	cfgfile := filepath.Join(cfgdir, inspectorsConfigFile)
 	if _, err := os.Stat(cfgfile); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
