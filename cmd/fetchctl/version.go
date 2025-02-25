@@ -31,7 +31,7 @@ import (
 var versionCmd VersionCmd
 
 func init() {
-	_, err := parser.AddCommand("version", "check the Fetch Service version", "long description", &versionCmd)
+	_, err := parser.AddCommand("version", "check the Fetch Service version", "", &versionCmd)
 	if err != nil {
 		panic(err)
 	}

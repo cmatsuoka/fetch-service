@@ -153,6 +153,10 @@ func (insps Inspectors) RunArtifactInspectors(dir string, a *metadata.Artifact) 
 	}
 	defer f.Close()
 
+	return insps.InspectArtifact(f, a)
+}
+
+func (insps *Inspectors) InspectArtifact(f ArtifactReader, a *metadata.Artifact) error {
 	mtype, err := mimetype.DetectReader(f)
 	if err != nil {
 		logger.Debug("cannot detect mime type")

@@ -99,10 +99,6 @@ func (ins *SnapAssertionInspector) InspectRequest(a RequestArtifact) error {
 
 // InspectArtifact extracts metadata from a known artifact file format.
 func (ins *SnapAssertionInspector) InspectArtifact(f ArtifactReader, a ResponseArtifact) error {
-	if a.ContentType() != "application/x.ubuntu.assertion" {
-		return nil
-	}
-
 	if !a.MimetypeIs(mimetypes.Assertion) {
 		return nil
 	}

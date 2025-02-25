@@ -257,15 +257,26 @@ func (ins *AptPackagesInspector) InspectArtifact(f ArtifactReader, a ResponseArt
 		return nil
 	}
 
+	if a.DownloadURL() == "" {
+		a.SetResponseRejected(ins, "unknown download URL")
+		return nil
+	}
+
 	u, err := url.Parse(a.DownloadURL())
 	if err != nil {
-		return fmt.Errorf("cannot parse URL: %s", err)
+		a.SetResponseRejected(ins, "cannot parse URL").Annotate(
+			Annotation{"url": a.DownloadURL()},
+		)
+		return nil
 	}
 
 	origin := utils.NormalizedOrigin(u)
 	pkg, ok := ins.getPackages(origin, u.Path)
 	if !ok {
-		return fmt.Errorf("inconsistent package state: '%s', '%s'", origin, u.Path)
+		a.SetResponseRejected(ins, "inconsistent package state").Annotate(
+			Annotation{"origin": origin, "path": u.Path},
+		)
+		return nil
 	}
 	pkg.sha256 = a.Sha256()
 
@@ -410,13 +421,15 @@ func (ins *AptPackagesInspector) getPackages(origin, packagesPath string) (*aptP
 func (ins *AptPackagesInspector) validateDebianPackage(f ArtifactReader, a ResponseArtifact) error {
 	u, err := url.Parse(a.DownloadURL())
 	if err != nil {
-		return fmt.Errorf("cannot parse URL: %s", err)
+		a.SetResponseRejected(ins, "cannot parse download URL")
+		return nil
 	}
 	origin := utils.NormalizedOrigin(u)
 
 	info, err := apt_cfg.NewDebPackageUrlInfo(u, &ins.config)
 	if err != nil {
-		return fmt.Errorf("invalid deb package URL")
+		a.SetResponseRejected(ins, "invalid deb package URL")
+		return nil
 	}
 
 	// check this deb against the packages file we know
