@@ -211,6 +211,19 @@ func (t *serviceSuite) TestServiceEntombment(c *C) {
 	c.Assert(svc.Alive(), Equals, false)
 }
 
+type serviceIdleShutdownTest struct {
+	createSession bool // Session has been created
+	serviceAlive  bool // Whether the service is still alive
+}
+
+var serviceIdleShutdownTests = []serviceIdleShutdownTest{{
+	createSession: false, // Idle shutdown only happens if no sessions are active
+	serviceAlive:  false,
+}, {
+	createSession: true, // Session exists, service will not be shut down
+	serviceAlive:  true,
+}}
+
 func (t *serviceSuite) TestServiceIdleShutdown(c *C) {
 	restorer := service.MockNewHttpProxy(func(port int, spool string, cert, key []byte, ch chan interface{}) (*proxy.HttpProxy, error) {
 		t.ch = ch
@@ -223,13 +236,7 @@ func (t *serviceSuite) TestServiceIdleShutdown(c *C) {
 	certPath, keyPath, err := createCertFiles(dir)
 	c.Assert(err, IsNil)
 
-	for _, tc := range []struct {
-		createSession bool
-		serviceAlive  bool
-	}{
-		{false, false},
-		{true, true},
-	} {
+	for _, tc := range serviceIdleShutdownTests {
 		opt := service.Options{
 			ProxyPort:      1337,
 			IdleShutdown:   1,
@@ -310,6 +317,30 @@ func (t *serviceSuite) TestGetServiceStatus(c *C) {
 	c.Assert(err, IsNil)
 }
 
+type requestInspectionTest struct {
+	sessionExists bool   // Whether the test session exists
+	policy        string // The session policy (struct or permissive)
+	errMsg        string // The expected inspection error message
+}
+
+var requestInspectionTests = []requestInspectionTest{{
+	sessionExists: true,
+	policy:        "permissive",
+	errMsg:        "",
+}, {
+	sessionExists: false,
+	policy:        "permissive",
+	errMsg:        "cannot inspect request: session foo is not active",
+}, {
+	sessionExists: true,
+	policy:        "strict",
+	errMsg:        "request rejected by inspectors",
+}, {
+	sessionExists: false,
+	policy:        "strict",
+	errMsg:        "cannot inspect request: session foo is not active",
+}}
+
 func (t *serviceSuite) TestRequestInspection(c *C) {
 	restorer := service.MockNewHttpProxy(func(port int, spool string, cert, key []byte, ch chan interface{}) (*proxy.HttpProxy, error) {
 		t.ch = ch
@@ -329,16 +360,7 @@ func (t *serviceSuite) TestRequestInspection(c *C) {
 		KeyPath:   keyPath,
 	}
 
-	for _, tc := range []struct {
-		sessionExists bool
-		policy        string
-		errMsg        string
-	}{
-		{true, "permissive", ""},
-		{false, "permissive", "cannot inspect request: session foo is not active"},
-		{true, "strict", "request rejected by inspectors"},
-		{false, "strict", "cannot inspect request: session foo is not active"},
-	} {
+	for _, tc := range requestInspectionTests {
 		svc, err := service.New(&opt)
 		c.Assert(err, IsNil)
 
@@ -368,27 +390,101 @@ func (t *serviceSuite) TestRequestInspection(c *C) {
 	}
 }
 
+type evaluateRequestInspectionTest struct {
+	policy        string                 // The session policy (strict or permissive)
+	inspections   metadata.InspectionMap // The inspection results
+	expectedError error                  // The expected inspection error
+}
+
+var evaluateRequestInspectionTests = []evaluateRequestInspectionTest{{
+	policy:        "permissive",
+	inspections:   metadata.InspectionMap{},
+	expectedError: nil,
+}, {
+	policy: "permissive",
+	inspections: metadata.InspectionMap{
+		"foo": &Inspection{Opinion: opinions.Unknown},
+	},
+	expectedError: nil,
+}, {
+	policy: "permissive",
+	inspections: metadata.InspectionMap{
+		"foo": &Inspection{Opinion: opinions.Rejected},
+	},
+	expectedError: nil,
+}, {
+	policy: "permissive",
+	inspections: metadata.InspectionMap{
+		"foo": &Inspection{Opinion: opinions.Pending},
+	},
+	expectedError: nil,
+}, {
+	policy: "permissive",
+	inspections: metadata.InspectionMap{
+		"foo": &Inspection{Opinion: opinions.Pending},
+		"bar": &Inspection{Opinion: opinions.Unknown},
+	},
+	expectedError: nil,
+}, {
+	policy: "permissive",
+	inspections: metadata.InspectionMap{
+		"foo": &Inspection{Opinion: opinions.Pending},
+		"bar": &Inspection{Opinion: opinions.Rejected},
+	},
+	expectedError: nil,
+}, {
+	policy: "permissive",
+	inspections: metadata.InspectionMap{
+		"foo": &Inspection{Opinion: opinions.Rejected},
+		"bar": &Inspection{Opinion: opinions.Unknown},
+	},
+	expectedError: nil,
+}, {
+	policy:        "strict",
+	inspections:   metadata.InspectionMap{},
+	expectedError: ErrRejectedRequest,
+}, {
+	policy: "strict",
+	inspections: metadata.InspectionMap{
+		"foo": &Inspection{Opinion: opinions.Unknown}},
+	expectedError: ErrRejectedRequest,
+}, {
+	policy: "strict",
+	inspections: metadata.InspectionMap{
+		"foo": &Inspection{Opinion: opinions.Rejected},
+	},
+	expectedError: ErrRejectedRequest,
+}, {
+	policy: "strict",
+	inspections: metadata.InspectionMap{
+		"foo": &Inspection{Opinion: opinions.Pending},
+	},
+	expectedError: nil,
+}, {
+	policy: "strict",
+	inspections: metadata.InspectionMap{
+		"foo": &Inspection{Opinion: opinions.Pending},
+		"bar": &Inspection{Opinion: opinions.Unknown},
+	},
+	expectedError: nil,
+}, {
+	policy: "strict",
+	inspections: metadata.InspectionMap{
+		"foo": &Inspection{Opinion: opinions.Pending},
+		"bar": &Inspection{Opinion: opinions.Rejected},
+	},
+	expectedError: ErrRejectedRequest,
+}, {
+	policy: "strict",
+	inspections: metadata.InspectionMap{
+		"foo": &Inspection{Opinion: opinions.Rejected},
+		"bar": &Inspection{Opinion: opinions.Unknown},
+	},
+	expectedError: ErrRejectedRequest,
+}}
+
 func (t *serviceSuite) TestEvaluateRequestInspection(c *C) {
-	for _, tc := range []struct {
-		policy        string
-		inspections   metadata.InspectionMap
-		expectedError error
-	}{
-		{"permissive", metadata.InspectionMap{}, nil},
-		{"permissive", metadata.InspectionMap{"foo": &Inspection{Opinion: opinions.Unknown}}, nil},
-		{"permissive", metadata.InspectionMap{"foo": &Inspection{Opinion: opinions.Rejected}}, nil},
-		{"permissive", metadata.InspectionMap{"foo": &Inspection{Opinion: opinions.Pending}}, nil},
-		{"permissive", metadata.InspectionMap{"foo": &Inspection{Opinion: opinions.Pending}, "bar": &Inspection{Opinion: opinions.Unknown}}, nil},
-		{"permissive", metadata.InspectionMap{"foo": &Inspection{Opinion: opinions.Pending}, "bar": &Inspection{Opinion: opinions.Rejected}}, nil},
-		{"permissive", metadata.InspectionMap{"foo": &Inspection{Opinion: opinions.Rejected}, "bar": &Inspection{Opinion: opinions.Unknown}}, nil},
-		{"strict", metadata.InspectionMap{}, ErrRejectedRequest},
-		{"strict", metadata.InspectionMap{"foo": &Inspection{Opinion: opinions.Unknown}}, ErrRejectedRequest},
-		{"strict", metadata.InspectionMap{"foo": &Inspection{Opinion: opinions.Rejected}}, ErrRejectedRequest},
-		{"strict", metadata.InspectionMap{"foo": &Inspection{Opinion: opinions.Pending}}, nil},
-		{"strict", metadata.InspectionMap{"foo": &Inspection{Opinion: opinions.Pending}, "bar": &Inspection{Opinion: opinions.Unknown}}, nil},
-		{"strict", metadata.InspectionMap{"foo": &Inspection{Opinion: opinions.Pending}, "bar": &Inspection{Opinion: opinions.Rejected}}, ErrRejectedRequest},
-		{"strict", metadata.InspectionMap{"foo": &Inspection{Opinion: opinions.Rejected}, "bar": &Inspection{Opinion: opinions.Unknown}}, ErrRejectedRequest},
-	} {
+	for _, tc := range evaluateRequestInspectionTests {
 		s := session.New("/my/spool", 0, tc.policy == "permissive")
 		defer s.Discard()
 
@@ -400,6 +496,45 @@ func (t *serviceSuite) TestEvaluateRequestInspection(c *C) {
 	}
 }
 
+type responseInspectionTest struct {
+	sessionExists bool   // Whether the test session has been created
+	hasArtifact   bool   // Whether the artifact has been previously downloaded
+	policy        string // Session policy (strict or permissive)
+	errMsg        string // the expected response inspection error message
+}
+
+var responseInspectionTests = []responseInspectionTest{{
+	sessionExists: true,
+	hasArtifact:   false,
+	policy:        "permissive",
+	errMsg:        "",
+}, {
+	sessionExists: true,
+	hasArtifact:   true,
+	policy:        "permissive",
+	errMsg:        "",
+}, {
+	sessionExists: false,
+	hasArtifact:   false,
+	policy:        "permissive",
+	errMsg:        "cannot inspect response: session foo is not active",
+}, {
+	sessionExists: true,
+	hasArtifact:   false,
+	policy:        "strict",
+	errMsg:        "artifact rejected by inspectors",
+}, {
+	sessionExists: true,
+	hasArtifact:   true,
+	policy:        "strict",
+	errMsg:        "", // artifact has already been downloaded
+}, {
+	sessionExists: false,
+	hasArtifact:   false,
+	policy:        "strict",
+	errMsg:        "cannot inspect response: session foo is not active",
+}}
+
 func (t *serviceSuite) TestResponseInspection(c *C) {
 	restorer := service.MockNewHttpProxy(func(port int, spool string, cert, key []byte, ch chan interface{}) (*proxy.HttpProxy, error) {
 		t.ch = ch
@@ -408,19 +543,7 @@ func (t *serviceSuite) TestResponseInspection(c *C) {
 	})
 	defer restorer()
 
-	for _, tc := range []struct {
-		sessionExists bool
-		hasArtifact   bool
-		policy        string
-		errMsg        string
-	}{
-		{true, false, "permissive", ""},
-		{true, true, "permissive", ""},
-		{false, false, "permissive", "cannot inspect response: session foo is not active"},
-		{true, false, "strict", "artifact rejected by inspectors"},
-		{true, true, "strict", ""}, // artifact has already been downloaded
-		{false, false, "strict", "cannot inspect response: session foo is not active"},
-	} {
+	for _, tc := range responseInspectionTests {
 		dir := c.MkDir()
 		certPath, keyPath, err := createCertFiles(dir)
 		c.Assert(err, IsNil)
@@ -479,28 +602,117 @@ func (t *serviceSuite) TestResponseInspection(c *C) {
 	}
 }
 
+type evaluateResponseInspectionTest struct {
+	policy         string                 // The session policy (strict or permissive)
+	inspections    metadata.InspectionMap // The inspection results
+	expectedResult opinions.OpinionKind   // The expected inspection result
+	expectedError  error                  // The expected inspection error
+}
+
+var evaluateResponseInspectionTests = []evaluateResponseInspectionTest{{
+	policy:         "permissive",
+	inspections:    metadata.InspectionMap{},
+	expectedResult: opinions.Rejected,
+	expectedError:  nil,
+}, {
+	policy: "permissive",
+	inspections: metadata.InspectionMap{
+		"foo": &Inspection{Opinion: opinions.Unknown},
+	},
+	expectedResult: opinions.Rejected,
+	expectedError:  nil,
+}, {
+	policy: "permissive",
+	inspections: metadata.InspectionMap{
+		"foo": &Inspection{Opinion: opinions.Rejected},
+	},
+	expectedResult: opinions.Rejected,
+	expectedError:  nil,
+}, {
+	policy: "permissive",
+	inspections: metadata.InspectionMap{
+		"foo": &Inspection{Opinion: opinions.Approved},
+	},
+	expectedResult: opinions.Approved,
+	expectedError:  nil,
+}, {
+	policy: "permissive",
+	inspections: metadata.InspectionMap{
+		"foo": &Inspection{Opinion: opinions.Approved},
+		"bar": &Inspection{Opinion: opinions.Unknown},
+	},
+	expectedResult: opinions.Approved,
+	expectedError:  nil,
+}, {
+	policy: "permissive",
+	inspections: metadata.InspectionMap{
+		"foo": &Inspection{Opinion: opinions.Approved},
+		"bar": &Inspection{Opinion: opinions.Rejected},
+	},
+	expectedResult: opinions.Rejected,
+	expectedError:  nil,
+}, {
+	policy: "permissive",
+	inspections: metadata.InspectionMap{
+		"foo": &Inspection{Opinion: opinions.Rejected},
+		"bar": &Inspection{Opinion: opinions.Unknown},
+	},
+	expectedResult: opinions.Rejected,
+	expectedError:  nil,
+}, {
+	policy:         "strict",
+	inspections:    metadata.InspectionMap{},
+	expectedResult: opinions.Rejected,
+	expectedError:  ErrRejectedArtifact,
+}, {
+	policy: "strict",
+	inspections: metadata.InspectionMap{
+		"foo": &Inspection{Opinion: opinions.Unknown},
+	},
+	expectedResult: opinions.Rejected,
+	expectedError:  ErrRejectedArtifact,
+}, {
+	policy: "strict",
+	inspections: metadata.InspectionMap{
+		"foo": &Inspection{Opinion: opinions.Rejected},
+	},
+	expectedResult: opinions.Rejected,
+	expectedError:  ErrRejectedArtifact,
+}, {
+	policy: "strict",
+	inspections: metadata.InspectionMap{
+		"foo": &Inspection{Opinion: opinions.Approved},
+	},
+	expectedResult: opinions.Approved,
+	expectedError:  nil,
+}, {
+	policy: "strict",
+	inspections: metadata.InspectionMap{
+		"foo": &Inspection{Opinion: opinions.Approved},
+		"bar": &Inspection{Opinion: opinions.Unknown},
+	},
+	expectedResult: opinions.Approved,
+	expectedError:  nil,
+}, {
+	policy: "strict",
+	inspections: metadata.InspectionMap{
+		"foo": &Inspection{Opinion: opinions.Approved},
+		"bar": &Inspection{Opinion: opinions.Rejected},
+	},
+	expectedResult: opinions.Rejected,
+	expectedError:  ErrRejectedArtifact,
+}, {
+	policy: "strict",
+	inspections: metadata.InspectionMap{
+		"foo": &Inspection{Opinion: opinions.Rejected},
+		"bar": &Inspection{Opinion: opinions.Unknown},
+	},
+	expectedResult: opinions.Rejected,
+	expectedError:  ErrRejectedArtifact,
+}}
+
 func (t *serviceSuite) TestEvaluateResponseInspection(c *C) {
-	for _, tc := range []struct {
-		policy        string
-		inspections   metadata.InspectionMap
-		result        opinions.OpinionKind
-		expectedError error
-	}{
-		{"permissive", metadata.InspectionMap{}, opinions.Rejected, nil},
-		{"permissive", metadata.InspectionMap{"foo": &Inspection{Opinion: opinions.Unknown}}, opinions.Rejected, nil},
-		{"permissive", metadata.InspectionMap{"foo": &Inspection{Opinion: opinions.Rejected}}, opinions.Rejected, nil},
-		{"permissive", metadata.InspectionMap{"foo": &Inspection{Opinion: opinions.Approved}}, opinions.Approved, nil},
-		{"permissive", metadata.InspectionMap{"foo": &Inspection{Opinion: opinions.Approved}, "bar": &Inspection{Opinion: opinions.Unknown}}, opinions.Approved, nil},
-		{"permissive", metadata.InspectionMap{"foo": &Inspection{Opinion: opinions.Approved}, "bar": &Inspection{Opinion: opinions.Rejected}}, opinions.Rejected, nil},
-		{"permissive", metadata.InspectionMap{"foo": &Inspection{Opinion: opinions.Rejected}, "bar": &Inspection{Opinion: opinions.Unknown}}, opinions.Rejected, nil},
-		{"strict", metadata.InspectionMap{}, opinions.Rejected, ErrRejectedArtifact},
-		{"strict", metadata.InspectionMap{"foo": &Inspection{Opinion: opinions.Unknown}}, opinions.Rejected, ErrRejectedArtifact},
-		{"strict", metadata.InspectionMap{"foo": &Inspection{Opinion: opinions.Rejected}}, opinions.Rejected, ErrRejectedArtifact},
-		{"strict", metadata.InspectionMap{"foo": &Inspection{Opinion: opinions.Approved}}, opinions.Approved, nil},
-		{"strict", metadata.InspectionMap{"foo": &Inspection{Opinion: opinions.Approved}, "bar": &Inspection{Opinion: opinions.Unknown}}, opinions.Approved, nil},
-		{"strict", metadata.InspectionMap{"foo": &Inspection{Opinion: opinions.Approved}, "bar": &Inspection{Opinion: opinions.Rejected}}, opinions.Rejected, ErrRejectedArtifact},
-		{"strict", metadata.InspectionMap{"foo": &Inspection{Opinion: opinions.Rejected}, "bar": &Inspection{Opinion: opinions.Unknown}}, opinions.Rejected, ErrRejectedArtifact},
-	} {
+	for _, tc := range evaluateResponseInspectionTests {
 		s := session.New("/my/spool", 0, tc.policy == "permissive")
 		defer s.Discard()
 
@@ -510,8 +722,34 @@ func (t *serviceSuite) TestEvaluateResponseInspection(c *C) {
 		a.ResponseInspection = tc.inspections
 		res := service.EvaluateResponseInspection(s, a)
 		c.Assert(res, Equals, tc.expectedError)
+		c.Assert(a.Result, Equals, tc.expectedResult)
 	}
 }
+
+type createSessionTest struct {
+	permissiveMode bool   // Whether the service runs in permissive mode
+	policy         string // The policy specified in session creation
+	errMsg         string // The expected error message, if any
+}
+
+var createSessionTests = []createSessionTest{{
+	permissiveMode: true,
+	policy:         "permissive",
+	errMsg:         "",
+}, {
+	permissiveMode: true,
+	policy:         "strict",
+	errMsg:         "",
+}, {
+	permissiveMode: false,
+	policy:         "permissive",
+	errMsg:         "Invalid session policy",
+}, {
+	permissiveMode: false,
+	policy:         "strict",
+	errMsg:         "",
+}}
+
 func (t *serviceSuite) TestCreateSession(c *C) {
 	restorer := service.MockNewHttpProxy(func(port int, spool string, cert, key []byte, ch chan interface{}) (*proxy.HttpProxy, error) {
 		t.ch = ch
@@ -524,15 +762,7 @@ func (t *serviceSuite) TestCreateSession(c *C) {
 	certPath, keyPath, err := createCertFiles(dir)
 	c.Assert(err, IsNil)
 
-	for _, tc := range []struct {
-		permissiveMode bool
-		policy         string
-		errMsg         string
-	}{
-		{true, "permissive", ""},
-		{false, "permissive", "Invalid session policy"},
-		{false, "strict", ""},
-	} {
+	for _, tc := range createSessionTests {
 		opt := service.Options{
 			ProxyPort:      1337,
 			Spool:          dir,
