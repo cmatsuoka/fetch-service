@@ -207,6 +207,16 @@ func (ins *SnapInspector) InspectArtifact(f ArtifactReader, a ResponseArtifact) 
 		return nil
 	}
 
+	slog.Info("================================ before")
+	slog.Info("================================ before")
+	slog.Info("================================ before")
+	slog.Info("================================ before")
+	time.Sleep(5 * time.Minute)
+	slog.Info("================================ after")
+	slog.Info("================================ before")
+	slog.Info("================================ before")
+	slog.Info("================================ before")
+
 	a.SetArtifactMetadata(ArtifactMetadata{
 		Type:          mimetypes.SnapPackage,
 		Name:          snapDeclarationAssertion.SnapName(),

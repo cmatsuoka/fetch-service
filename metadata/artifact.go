@@ -58,6 +58,7 @@ type Artifact struct {
 	SessionCacheDir    string               `json:"-"`                         // Location to store files and metadata
 	MimeType           *mimetype.MIME       `json:"-"`                         // The artifact MIME type
 	Request            *http.Request        `json:"-"`                         // request handle for body content inspection
+	Finished           bool                 `json:"-"`                         // Finished inspection
 
 	logger logger.Logger `json:"-"` // Session-aware log helper
 }

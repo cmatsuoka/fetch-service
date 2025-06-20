@@ -46,7 +46,10 @@ func handleMessages(svc *Service, msg interface{}) {
 		handleRequestInspection(v)
 
 	case messages.ResponseInspection:
-		handleResponseInspection(v)
+		handleResponseInspection(v, svc.ch)
+
+	case messages.FinishInspection:
+		handleFinishInspection(v)
 
 	case messages.CreateSession:
 		handleCreateSession(v, svc.opt.Spool, svc.opt.PermissiveMode, svc)
@@ -91,7 +94,7 @@ func handleRequestInspection(v messages.RequestInspection) {
 	}(s, v.A)
 }
 
-func handleResponseInspection(v messages.ResponseInspection) {
+func handleResponseInspection(v messages.ResponseInspection, ch chan interface{}) {
 	sessionId := v.A.SessionId
 	digest := v.A.Metadata.Sha256
 	slog := v.A.Logger()
@@ -110,7 +113,7 @@ func handleResponseInspection(v messages.ResponseInspection) {
 	dl := v.A.CurrentDownload
 	slog.Infof("%s %s: %s (%s)", dl.Method, dl.URL, dl.Status, dl.ContentType)
 
-	if s.HasArtifact(digest) {
+	if s.HasArtifact(digest) && v.A.Finished {
 		slog.Infof("artifact %s already downloaded", digest)
 		s.AddDownload(v.A.CurrentDownload)
 		os.Remove(v.A.Tempfile)
@@ -123,18 +126,37 @@ func handleResponseInspection(v messages.ResponseInspection) {
 	}
 
 	// Add metadata to session
-	s.AddArtifact(v.A)
-	if err := s.SaveData(digest); err != nil {
-		v.Rch <- err
-		return
+	if !s.HasArtifact(digest) {
+		s.AddArtifact(v.A)
+		if err := s.SaveData(digest); err != nil {
+			v.Rch <- err
+			return
+		}
 	}
 
 	s.AddDownload(v.A.CurrentDownload)
 
 	// Run response inspectors
-	go func(s *session.Session, a *metadata.Artifact) {
-		v.Rch <- runResponseInspection(s, a)
-	}(s, v.A)
+	go func(s *session.Session, a *metadata.Artifact, ch chan interface{}) {
+		err := runResponseInspection(s, a)
+
+		// Add artifact to session after inspection
+		cinsp := messages.NewFinishInspection(v.A)
+		ch <- cinsp
+		<-cinsp.Rch
+
+		v.Rch <- err
+
+	}(s, v.A, ch)
+}
+
+func handleFinishInspection(v messages.FinishInspection) {
+	digest := v.A.Metadata.Sha256
+	v.A.Finished = true
+
+	slog := v.A.Logger()
+	slog.Infof("artifact %s inspection complete", digest)
+	v.Rch <- nil
 }
 
 func handleCreateSession(v messages.CreateSession, spoolDir string, permissiveMode bool, svc *Service) {

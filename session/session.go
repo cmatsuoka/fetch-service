@@ -69,6 +69,8 @@ type Session struct {
 
 	timer   *sessionTimer // timeout to auto-finish an idle session
 	revoked bool          // session token has been revoked
+
+	completed map[digests.Sha256Digest]struct{} // completed artifact inspections
 }
 
 var (
@@ -246,15 +248,15 @@ func (s *Session) AddArtifact(a *metadata.Artifact) {
 
 // HasArtifact verifies whether the given digest corresponds
 // to an artifact downloaded in this session.
-func (s *Session) HasArtifact(sha1 digests.Sha256Digest) bool {
-	_, ok := s.A[sha1]
+func (s *Session) HasArtifact(sha256 digests.Sha256Digest) bool {
+	_, ok := s.A[sha256]
 	return ok
 }
 
 // ArtifactResult obtains the result from a previous HasArtifact
 // inspection, or Rejected if it was not previously inspected.
-func (s *Session) ArtifactResult(sha1 digests.Sha256Digest) opinions.OpinionKind {
-	a, ok := s.A[sha1]
+func (s *Session) ArtifactResult(sha256 digests.Sha256Digest) opinions.OpinionKind {
+	a, ok := s.A[sha256]
 	if !ok {
 		return opinions.Rejected
 	}
