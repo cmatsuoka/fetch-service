@@ -69,32 +69,70 @@ func NewFileDownloadHandler(resp *http.Response, a *metadata.Artifact, spool str
 	a.AssetDir = assetDir
 	a.SessionCacheDir = cacheDir
 
-	if err = localDownload(resp, a, tempfile); err != nil {
-		return nil, err
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		return nil, fmt.Errorf("cannot create download pipe: %w", err)
 	}
 
-	respIns := messages.NewResponseInspection(a)
-	ch <- respIns
-	select {
-	case err := <-respIns.Rch:
+	dch := make(chan error, 1)
+
+	go func(dch chan error, pw io.WriteCloser) {
+		// Start downloading the data. If it takes less than 5 seconds, return
+		// immediately. Otherwise return 200 OK and send the data when it's
+		// downloaded and passed inspection, or close the reader if it was
+		// rejected.
+
+		if err = localDownload(resp, a, tempfile); err != nil {
+			logger.Warningf("[proxy] local download error: %s", err)
+			pw.Close()
+			dch <- err
+			return
+		}
+
+		respIns := messages.NewResponseInspection(a)
+		ch <- respIns
+		select {
+		case err := <-respIns.Rch:
+			if err != nil {
+				dch <- err
+				pw.Close()
+				return
+			}
+		case <-time.After(insTimeout):
+			dch <- fmt.Errorf("inspection of artifact %s timed out", a.Metadata.Sha256)
+			return
+		}
+
+		filename := fmt.Sprintf("%s.data", a.Metadata.Sha256)
+		buffer, err := os.Open(filepath.Join(assetDir, filename))
 		if err != nil {
+			dch <- fmt.Errorf("cannot open asset file: %w", err)
+			return
+		}
+
+		dch <- nil // Download completed successfully.
+		io.Copy(pw, buffer)
+		pw.Close()
+	}(dch, pw)
+
+	select {
+	case err := <-dch:
+		// We have a resonse in less than 5 seconds, return it.
+		if err != nil {
+			// Download failed, return the error.
 			return nil, err
 		}
-	case <-time.After(insTimeout):
-		return nil, fmt.Errorf("inspection of artifact %s timed out", a.Metadata.Sha256)
-	}
-
-	filename := fmt.Sprintf("%s.data", a.Metadata.Sha256)
-	buffer, err := os.Open(filepath.Join(assetDir, filename))
-	if err != nil {
-		return nil, fmt.Errorf("cannot open asset file: %w", err)
+		// Download succeeded, return its data.
+	case <-time.After(5 * time.Second):
+		// This is a long download, keep downloading it but return an HTTP header
+		// so the client will not time out waiting for a response.
 	}
 
 	h := &FileDownloadHandler{
 		ch:       ch,
 		a:        a,
 		tempfile: tempfile,
-		body:     buffer,
+		body:     pr,
 	}
 
 	return h, nil
