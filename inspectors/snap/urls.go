@@ -1,7 +1,7 @@
 // -*- Mode: Go; indent-tabs-mode: t -*-
 
 /*
- * Copyright 2024 Canonical Ltd.
+ * Copyright 2024-2025 Canonical Ltd.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -40,6 +40,7 @@ var (
 	reSnapPackageAlt = regexp.MustCompile(`^https://[^/]+\.snapcraftcontent\.com:443/[^?]+/([A-Za-z0-9]+)_([0-9]+)\.snap\?`)
 	reSnapInfo       = regexp.MustCompile(`^https://api.snapcraft.io:443/v2/snaps/info/([^?/]+)`)
 	reSnapRefresh    = regexp.MustCompile(`^https://api.snapcraft.io:443/v2/snaps/refresh$`)
+	reSnapNonce      = regexp.MustCompile(`^https://api.snapcraft.io:443/v1/snaps/auth/nonces$`)
 
 	reSnapRevisionAssertion    = regexp.MustCompile(`^https://api.snapcraft.io:443/v2/assertions/snap-revision/`)
 	reSnapDeclarationAssertion = regexp.MustCompile(`^https://api.snapcraft.io:443/v2/assertions/snap-declaration/`)
@@ -90,6 +91,17 @@ func newSnapRefreshUrlInfo(u *url.URL) (*snapRefreshUrlInfo, error) {
 		return nil, fmt.Errorf("%s: not a valid snap refresh URL", u.String())
 	}
 	info := &snapRefreshUrlInfo{}
+	return info, nil
+}
+
+type snapNonceUrlInfo struct {
+}
+
+func newSnapNonceUrlInfo(u *url.URL) (*snapNonceUrlInfo, error) {
+	if !reSnapNonce.MatchString(u.String()) {
+		return nil, fmt.Errorf("%s: not a valid snap nonce URL", u.String())
+	}
+	info := &snapNonceUrlInfo{}
 	return info, nil
 }
 
