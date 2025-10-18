@@ -91,8 +91,10 @@ func (ins *WheelInspector) InspectArtifact(f ArtifactReader, a ResponseArtifact)
 
 	size := int64(f.Len())
 	notes := newWheelNotes()
+	md := ArtifactMetadata{Type: mimetypes.PythonWheel}
 
-	if err := readWheelMetadata(ins, f, size, a, notes, slog); err != nil {
+	err := readWheelMetadata(ins, f, size, a, &md, notes, slog)
+	if err != nil {
 		return err
 	}
 
@@ -105,17 +107,16 @@ func (ins *WheelInspector) InspectArtifact(f ArtifactReader, a ResponseArtifact)
 		return err
 	}
 
-	processOpinion(ins, a, notes)
+	processOpinion(ins, a, md, notes)
 
 	return nil
 }
 
-func processOpinion(ins *WheelInspector, a ResponseArtifact, notes *wheelNotes) {
+func processOpinion(ins *WheelInspector, a ResponseArtifact, md ArtifactMetadata, notes *wheelNotes) {
 	// Reject if required files not found
 	if len(notes.requirementFaults) > 0 {
 		notes.Add("faults", notes.requirementFaults)
-		a.SetResponseRejected(ins,
-			"wheel file requirements not met").Annotate(notes.Annotation)
+		a.SetResponseRejected(ins, "wheel file requirements not met", md).Annotate(notes.Annotation)
 		return
 	}
 
@@ -130,16 +131,15 @@ func processOpinion(ins *WheelInspector, a ResponseArtifact, notes *wheelNotes) 
 		if len(notes.extraFiles) > 0 {
 			notes.Add("extra-files", notes.extraFiles)
 		}
-		a.SetResponseRejected(ins,
-			"wheel file parsed but failed integrity verification").Annotate(notes.Annotation)
+		a.SetResponseRejected(ins, "wheel file parsed but failed integrity verification", md).Annotate(notes.Annotation)
 		return
 	}
 
-	a.SetResponseApproved(ins, "wheel file successfully parsed").Annotate(notes.Annotation)
+	a.SetResponseApproved(ins, "wheel file successfully parsed", md).Annotate(notes.Annotation)
 }
 
 // readWheelMetadata reads the wheel's METADATA file.
-func readWheelMetadata(ins *WheelInspector, f io.ReaderAt, size int64, a ResponseArtifact, notes *wheelNotes, slog logger.Logger) error {
+func readWheelMetadata(ins *WheelInspector, f io.ReaderAt, size int64, a ResponseArtifact, md *ArtifactMetadata, notes *wheelNotes, slog logger.Logger) error {
 	z, err := zip.NewReader(f, size)
 	if err != nil {
 		return err
@@ -155,7 +155,7 @@ func readWheelMetadata(ins *WheelInspector, f io.ReaderAt, size int64, a Respons
 			}
 			defer zf.Close()
 
-			md, ver, err := scanWheelMetadata(zf, slog)
+			ver, err := scanWheelMetadata(zf, md, slog)
 			if err != nil {
 				return err
 			}
@@ -170,7 +170,6 @@ func readWheelMetadata(ins *WheelInspector, f io.ReaderAt, size int64, a Respons
 				return nil
 			}
 
-			a.SetArtifactMetadata(md)
 			notes.Add("metadata-version", ver)
 			return nil
 		}
@@ -182,13 +181,13 @@ func readWheelMetadata(ins *WheelInspector, f io.ReaderAt, size int64, a Respons
 }
 
 // scanWheelMetadata parses metadata entries from the given file.
-func scanWheelMetadata(zf io.ReadCloser, slog logger.Logger) (ArtifactMetadata, string, error) {
+func scanWheelMetadata(zf io.ReadCloser, md *ArtifactMetadata, slog logger.Logger) (string, error) {
 	sc := bufio.NewScanner(zf)
 	sc.Split(bufio.ScanLines)
 
 	temp, err := os.CreateTemp("", "tmpfile-")
 	if err != nil {
-		return ArtifactMetadata{}, "", err
+		return "", err
 	}
 	defer temp.Close()
 	defer os.Remove(temp.Name())
@@ -206,7 +205,7 @@ func scanWheelMetadata(zf io.ReadCloser, slog logger.Logger) (ArtifactMetadata, 
 		}
 
 		if _, err := fmt.Fprintln(t, line); err != nil {
-			return ArtifactMetadata{}, "", err
+			return "", err
 		}
 
 		k, v, ok := strings.Cut(line, ":")
@@ -239,7 +238,7 @@ func scanWheelMetadata(zf io.ReadCloser, slog logger.Logger) (ArtifactMetadata, 
 
 	license, err = utils.GetLicense(temp.Name(), slog)
 	if err != nil {
-		return ArtifactMetadata{}, mver, err
+		return mver, err
 	}
 
 	// If vendor is not specified, fall back to maintainer
@@ -247,18 +246,15 @@ func scanWheelMetadata(zf io.ReadCloser, slog logger.Logger) (ArtifactMetadata, 
 		vendor = maintainer
 	}
 
-	md := ArtifactMetadata{
-		Type:        mimetypes.PythonWheel,
-		Name:        name,
-		Version:     version,
-		Description: description,
-		Author:      author,
-		AuthorEmail: email,
-		Vendor:      vendor,
-		License:     license,
-	}
+	md.Name = name
+	md.Version = version
+	md.Description = description
+	md.Author = author
+	md.AuthorEmail = email
+	md.Vendor = vendor
+	md.License = license
 
-	return md, mver, nil
+	return mver, nil
 }
 
 // memberFile is used to check integrity of the payload files.

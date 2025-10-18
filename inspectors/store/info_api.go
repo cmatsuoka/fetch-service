@@ -199,13 +199,13 @@ func (ins *StoreInfoApiInspector) InspectArtifact(f ArtifactReader, a ResponseAr
 		return nil // we don't recognize this artifact
 	}
 
-	a.SetArtifactMetadata(ArtifactMetadata{
+	md := ArtifactMetadata{
 		Type:        mimetypes.StoreInfoAPI,
 		Name:        "Store protocol response",
 		Description: "Store response for info request",
-	})
+	}
 
-	a.SetResponseApproved(ins, "valid store info API response").Annotate(
+	a.SetResponseApproved(ins, "valid store info API response", md).Annotate(
 		Annotation{
 			"name":       info.Name,
 			"type":       pkgType,
@@ -280,6 +280,8 @@ func (ins *StoreInfoApiInspector) validateBldBin(f ArtifactReader, a ResponseArt
 				return err
 			}
 
+			md := ArtifactMetadata{Type: mimetypes.BldBinPackage}
+
 			ainfo, rev, channel := ins.findInfo(sha3_384)
 			if ainfo != nil {
 				if ainfo.Type == "bins" {
@@ -295,7 +297,7 @@ func (ins *StoreInfoApiInspector) validateBldBin(f ArtifactReader, a ResponseArt
 					)
 
 				} else {
-					a.SetResponseRejected(ins, "file digest matches a request for a different package type").Annotate(
+					a.SetResponseRejected(ins, "file digest matches a request for a different package type", md).Annotate(
 						Annotation{
 							"package-id": ainfo.ID,
 							"type":       ainfo.Type,
@@ -305,7 +307,7 @@ func (ins *StoreInfoApiInspector) validateBldBin(f ArtifactReader, a ResponseArt
 					)
 				}
 			} else {
-				a.SetResponseRejected(ins, "file digest does not match any store info API request")
+				a.SetResponseRejected(ins, "file digest does not match any store info API request", md)
 			}
 
 			metadataFound = true

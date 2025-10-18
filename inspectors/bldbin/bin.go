@@ -121,8 +121,7 @@ func (ins *BldBinInspector) InspectArtifact(f ArtifactReader, a ResponseArtifact
 				StoreRevision: revision,
 			}
 
-			a.SetArtifactMetadata(md)
-			a.SetResponseApproved(ins, "bin package metadata parsed")
+			a.SetResponseApproved(ins, "bin package metadata parsed", md)
 
 			break
 		}

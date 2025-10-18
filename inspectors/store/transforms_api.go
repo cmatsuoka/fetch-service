@@ -123,10 +123,16 @@ func (ins *StoreTransformsApiInspector) InspectArtifact(f ArtifactReader, a Resp
 		return nil // we don't recognize this artifact
 	}
 
+	md := ArtifactMetadata{
+		Type:        mimetypes.StoreTransformsAPI,
+		Name:        "Store protocol response",
+		Description: "Store response for workspace transforms request",
+	}
+
 	transforms := make([]string, 0, len(data.Transforms))
 	for _, t := range data.Transforms {
 		if t.Package.Type != "bin" {
-			a.SetResponseRejected(ins, "invalid package type").Annotate(
+			a.SetResponseRejected(ins, "invalid package type", md).Annotate(
 				Annotation{
 					"workspace-id": data.WorkspaceID,
 					"package-name": t.Package.Name,
@@ -138,13 +144,7 @@ func (ins *StoreTransformsApiInspector) InspectArtifact(f ArtifactReader, a Resp
 		transforms = append(transforms, fmt.Sprintf("%s from %s to %s", t.Package.Name, t.From.Channel.Name, t.To.Channel.Name))
 	}
 
-	a.SetArtifactMetadata(ArtifactMetadata{
-		Type:        mimetypes.StoreTransformsAPI,
-		Name:        "Store protocol response",
-		Description: "Store response for workspace transforms request",
-	})
-
-	a.SetResponseApproved(ins, "valid store transforms API response").Annotate(
+	a.SetResponseApproved(ins, "valid store transforms API response", md).Annotate(
 		Annotation{
 			"workspace-id": data.WorkspaceID,
 			"transforms":   transforms,

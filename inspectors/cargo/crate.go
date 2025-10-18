@@ -120,8 +120,7 @@ func (ins *CargoCrateInspector) InspectArtifact(f ArtifactReader, a ResponseArti
 			}
 			// Check that crate metadata matches the request
 			if md.Name == package_name && md.Version == package_version {
-				a.SetArtifactMetadata(*md)
-				a.SetResponseApproved(ins, "rust crate successfully parsed")
+				a.SetResponseApproved(ins, "rust crate successfully parsed", *md)
 			}
 			break
 		}

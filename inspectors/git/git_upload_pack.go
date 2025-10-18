@@ -256,20 +256,19 @@ func (ins *UploadPackInspector) inspectResponseCommand(f ArtifactReader, a Respo
 
 func (ins *UploadPackInspector) inspectLsRefsResponse(f ArtifactReader, a ResponseArtifact, repo, vendor string, notes Annotation, slog logger.Logger) error {
 	if !a.MimetypeIs("text/plain") {
-		a.SetResponseRejected(ins, "bad data type for ls-refs response")
-		return nil
+		return nil // We don't recognize this artifact
 	}
 
-	a.SetArtifactMetadata(ArtifactMetadata{
+	md := ArtifactMetadata{
 		Type:        mimetypes.GitUploadPackLsRef,
 		Name:        "git ls-refs response",
 		Description: "Response to the git 'ls-refs' command",
 		Vendor:      vendor,
-	})
+	}
 
 	msgs, err := decodeGitProtocol(f, slog)
 	if err != nil {
-		a.SetResponseRejected(ins, "cannot decode git protocol").Annotate(Annotation{"error-msg": err.Error()})
+		a.SetResponseRejected(ins, "cannot decode git protocol", md).Annotate(Annotation{"error-msg": err.Error()})
 		return nil
 	}
 
@@ -301,7 +300,7 @@ func (ins *UploadPackInspector) inspectLsRefsResponse(f ArtifactReader, a Respon
 		}
 	}
 
-	a.SetResponseApproved(ins, "git ls-refs response decoded").Annotate(notes)
+	a.SetResponseApproved(ins, "git ls-refs response decoded", md).Annotate(notes)
 	return nil
 }
 

@@ -115,7 +115,7 @@ func (ins *MetadataInspector) parseMetadataFile(f io.Reader, a ResponseArtifact)
 		vendor = maintainer
 	}
 
-	a.SetArtifactMetadata(ArtifactMetadata{
+	md := ArtifactMetadata{
 		Type:        mimetypes.PythonMetadata,
 		Name:        name,
 		Version:     version,
@@ -123,9 +123,9 @@ func (ins *MetadataInspector) parseMetadataFile(f io.Reader, a ResponseArtifact)
 		Author:      author,
 		AuthorEmail: email,
 		Vendor:      vendor,
-	})
+	}
 
-	a.SetResponseApproved(ins, "metadata file successfully parsed").Annotate(
+	a.SetResponseApproved(ins, "metadata file successfully parsed", md).Annotate(
 		Annotation{
 			"metadata-version": mver,
 		},

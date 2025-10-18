@@ -185,13 +185,13 @@ func (ins *SimpleStreamsDownloadInspector) InspectArtifact(f ArtifactReader, a R
 	}
 	slog.Debugf("parsed Simple Streams Download for stream %s", stream)
 
-	a.SetArtifactMetadata(ArtifactMetadata{
+	md := ArtifactMetadata{
 		Type:        mimetypes.SimpleStreamsProducts,
 		Name:        "Simple Streams Download",
 		Description: fmt.Sprintf("Simple Streams Download for %s", dl.ContentId),
-	})
+	}
 
-	a.SetResponseApproved(ins, "valid Simple Streams Download file").Annotate(
+	a.SetResponseApproved(ins, "valid Simple Streams Download file", md).Annotate(
 		Annotation{productItems: ins.extractSupportedUbuntuImages(dl.Products)},
 	)
 

@@ -113,9 +113,12 @@ func (ins *SnapcraftInspector) InspectArtifact(f ArtifactReader, a ResponseArtif
 	if !found {
 		return nil
 	}
+
+	md := ArtifactMetadata{Type: mimetypes.Snapcraft}
+
 	yamldata_filereader, err := osOpen(snapcraftYamlPath)
 	if err != nil {
-		a.SetResponseRejected(ins, "cannot open snapcraft.yaml file")
+		a.SetResponseRejected(ins, "cannot open snapcraft.yaml file", md)
 		return nil
 	}
 	defer yamldata_filereader.Close()
@@ -123,18 +126,16 @@ func (ins *SnapcraftInspector) InspectArtifact(f ArtifactReader, a ResponseArtif
 	var data snapcraftYaml
 	dec := yaml.NewDecoder(yamldata_filereader)
 	if err := dec.Decode(&data); err != nil {
-		a.SetResponseRejected(ins, "cannot decode snapcraft.yaml")
+		a.SetResponseRejected(ins, "cannot decode snapcraft.yaml", md)
 		return nil
 	}
 
-	a.SetArtifactMetadata(ArtifactMetadata{
-		Type:        mimetypes.Snapcraft,
-		Name:        data.Name,
-		Version:     data.Version,
-		Description: data.Summary,
-		License:     data.License,
-	})
-	a.SetResponseApproved(ins, "snapcraft repository found")
+	md.Name = data.Name
+	md.Version = data.Version
+	md.Description = data.Summary
+	md.License = data.License
+
+	a.SetResponseApproved(ins, "snapcraft repository found", md)
 
 	return nil
 }

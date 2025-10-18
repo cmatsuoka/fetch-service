@@ -87,12 +87,12 @@ func (ins *SnapInfoInspector) InspectArtifact(f ArtifactReader, a ResponseArtifa
 
 	if len(b.ChannelMap) > 0 && b.ChannelMap[0]["version"] != "" && b.Name != "" && b.SnapID != "" {
 
-		a.SetArtifactMetadata(ArtifactMetadata{
+		md := ArtifactMetadata{
 			Type:        mimetypes.SnapInfo,
 			Name:        "Store protocol response",
 			Description: "Snap store response for info request",
-		})
-		a.SetResponseApproved(ins, "valid snap API info endpoint response").Annotate(
+		}
+		a.SetResponseApproved(ins, "valid snap API info endpoint response", md).Annotate(
 			Annotation{
 				"name":      b.Name,
 				"snap-id":   b.SnapID,

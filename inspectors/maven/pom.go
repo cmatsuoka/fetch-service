@@ -88,8 +88,7 @@ func (ins *MavenPomInspector) InspectArtifact(f ArtifactReader, a ResponseArtifa
 
 	if md.Name == artifact_id && md.Version == version {
 		md.Name = fmt.Sprintf(`Maven POM file for '%s'`, artifact_id)
-		a.SetArtifactMetadata(*md)
-		a.SetResponseApproved(ins, "Maven pom successfully parsed and validated")
+		a.SetResponseApproved(ins, "Maven pom successfully parsed and validated", *md)
 	}
 	return nil
 }

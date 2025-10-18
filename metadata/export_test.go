@@ -18,3 +18,7 @@
  */
 
 package metadata
+
+var (
+	ArtifactSetMetadata = (*Artifact).setArtifactMetadata
+)

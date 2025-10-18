@@ -76,9 +76,12 @@ func (ins *SourcecraftInspector) InspectArtifact(f ArtifactReader, a ResponseArt
 	if _, err := osStat(sourcecraftYamlPath); err != nil {
 		return nil
 	}
+
+	md := ArtifactMetadata{Type: mimetypes.Sourcecraft}
+
 	yamldata_filereader, err := osOpen(sourcecraftYamlPath)
 	if err != nil {
-		a.SetResponseRejected(ins, "cannot open sourcecraft.yaml file")
+		a.SetResponseRejected(ins, "cannot open sourcecraft.yaml file", md)
 		return nil
 	}
 	defer yamldata_filereader.Close()
@@ -86,17 +89,15 @@ func (ins *SourcecraftInspector) InspectArtifact(f ArtifactReader, a ResponseArt
 	var data sourcecraftYaml
 	dec := yaml.NewDecoder(yamldata_filereader)
 	if err := dec.Decode(&data); err != nil {
-		a.SetResponseRejected(ins, "cannot decode sourcecraft.yaml")
+		a.SetResponseRejected(ins, "cannot decode sourcecraft.yaml", md)
 		return nil
 	}
 
-	a.SetArtifactMetadata(ArtifactMetadata{
-		Type:        mimetypes.Sourcecraft,
-		Name:        data.Name,
-		Version:     data.Version,
-		Description: data.Summary,
-		License:     data.License,
-	})
-	a.SetResponseApproved(ins, "sourcecraft repository found")
+	md.Name = data.Name
+	md.Version = data.Version
+	md.Description = data.Summary
+	md.License = data.License
+
+	a.SetResponseApproved(ins, "sourcecraft repository found", md)
 	return nil
 }

@@ -186,7 +186,8 @@ func (s *wheelSuite) TestWheelReadMetadata(c *C) {
 	a.SetRequestPending(ins, "test")
 
 	notes := pip.NewWheelNotes()
-	err = pip.ReadWheelMetadata(ins, f, int64(f.Len()), a, notes, s.slog)
+	md := ArtifactMetadata{}
+	err = pip.ReadWheelMetadata(ins, f, int64(f.Len()), a, &md, notes, s.slog)
 	c.Assert(err, IsNil)
 	c.Assert(a.Metadata.Name, Equals, "trololo")
 	c.Assert(a.Metadata.Version, Equals, "3.14159")

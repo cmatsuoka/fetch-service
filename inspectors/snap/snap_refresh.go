@@ -81,12 +81,12 @@ func (ins *SnapRefreshInspector) InspectArtifact(f ArtifactReader, a ResponseArt
 	}
 
 	if len(b.Results) > 0 && b.Results[0].EffectiveChannel != "" && b.Results[0].Name != "" && b.Results[0].SnapId != "" {
-		a.SetArtifactMetadata(ArtifactMetadata{
+		md := ArtifactMetadata{
 			Type:        mimetypes.SnapRefresh,
 			Name:        "Store protocol response",
 			Description: "Snap store response for refresh request",
-		})
-		a.SetResponseApproved(ins, "valid snap API refresh endpoint response").Annotate(
+		}
+		a.SetResponseApproved(ins, "valid snap API refresh endpoint response", md).Annotate(
 			Annotation{
 				"name":    b.Results[0].Name,
 				"channel": b.Results[0].EffectiveChannel,

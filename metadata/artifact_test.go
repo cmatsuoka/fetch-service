@@ -220,7 +220,7 @@ func (t *metadataSuite) TestSetArtifactMetadata(c *C) {
 
 		a := metadata.NewArtifact()
 		a.Metadata.Type = "text/plain"
-		a.SetArtifactMetadata(m)
+		metadata.ArtifactSetMetadata(a, m)
 
 		c.Check(a.Metadata.Type, Equals, tc.expectedType)
 		c.Check(a.Metadata.Name, Equals, m.Name)

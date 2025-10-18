@@ -76,9 +76,12 @@ func (ins *RockcraftInspector) InspectArtifact(f ArtifactReader, a ResponseArtif
 	if _, err := osStat(rockcraftYamlPath); err != nil {
 		return nil
 	}
+
+	md := ArtifactMetadata{Type: mimetypes.Rockcraft}
+
 	yamldata_filereader, err := osOpen(rockcraftYamlPath)
 	if err != nil {
-		a.SetResponseRejected(ins, "cannot open rockcraft.yaml file")
+		a.SetResponseRejected(ins, "cannot open rockcraft.yaml file", md)
 		return nil
 	}
 	defer yamldata_filereader.Close()
@@ -86,18 +89,16 @@ func (ins *RockcraftInspector) InspectArtifact(f ArtifactReader, a ResponseArtif
 	var data rockcraftYaml
 	dec := yaml.NewDecoder(yamldata_filereader)
 	if err := dec.Decode(&data); err != nil {
-		a.SetResponseRejected(ins, "cannot decode rockcraft.yaml")
+		a.SetResponseRejected(ins, "cannot decode rockcraft.yaml", md)
 		return nil
 	}
 
-	a.SetArtifactMetadata(ArtifactMetadata{
-		Type:        mimetypes.Rockcraft,
-		Name:        data.Name,
-		Version:     data.Version,
-		Description: data.Summary,
-		License:     data.License,
-	})
-	a.SetResponseApproved(ins, "rockcraft repository found")
+	md.Name = data.Name
+	md.Version = data.Version
+	md.Description = data.Summary
+	md.License = data.License
+
+	a.SetResponseApproved(ins, "rockcraft repository found", md)
 
 	return nil
 }

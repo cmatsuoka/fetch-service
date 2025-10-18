@@ -107,8 +107,7 @@ func (ins *MavenJarInspector) InspectArtifact(f ArtifactReader, a ResponseArtifa
 			}
 
 			if md.Name == artifact_id && md.Version == version {
-				a.SetArtifactMetadata(*md)
-				a.SetResponseApproved(ins, "Maven pom successfully parsed and validated")
+				a.SetResponseApproved(ins, "Maven pom successfully parsed and validated", *md)
 			}
 			break
 		}
